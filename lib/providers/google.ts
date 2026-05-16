@@ -1,5 +1,6 @@
 import { diagnoseLead } from "@/lib/diagnose";
 import { enrichFromWebsite } from "@/lib/enrich";
+import { getNicheTerms } from "@/lib/niches";
 import type { Lead } from "@/lib/types";
 
 type GooglePlace = {
@@ -166,21 +167,23 @@ async function runTextSearch(params: { apiKey: string; textQuery: string; limit:
 }
 
 function buildGoogleQueries(niche: string, location: string) {
-  const normalized = normalize(niche);
-  const singular = normalized.endsWith("s") ? normalized.slice(0, -1) : normalized;
-  const aliases: Record<string, string[]> = {
-    sorveteria: ["sorvetes", "gelateria", "gelato", "acai", "açaí", "ice cream"],
-    academia: ["academia", "fitness", "crossfit", "pilates", "yoga", "musculacao", "musculação", "personal trainer"],
-    restaurante: ["restaurante", "lanchonete", "pizzaria", "hamburgueria", "cafe", "bar"],
-    dentista: ["dentista", "odontologia", "clinica odontologica"],
-    advogado: ["advogado", "advocacia", "escritorio de advocacia"],
-    farmacia: ["farmacia", "farmácia", "drogaria"],
-    mercado: ["mercado", "supermercado", "mercearia"],
-    clinica: ["clinica", "clínica", "consultorio medico", "médico"],
-    oficina: ["oficina mecanica", "auto center", "mecanica automotiva"]
-  };
-  const terms = [niche, singular, ...(aliases[normalized] ?? []), ...(aliases[singular] ?? [])];
-  return Array.from(new Set(terms.map((term) => `${term} em ${location}`)));
+  // Usa o catálogo central — cobre 60+ nichos + gera fallback inteligente
+  // pra nichos não catalogados (loja de drones, software house, etc).
+  const terms = getNicheTerms(niche);
+
+  // Pra cada termo, 2 variações de query — capturam intenções diferentes
+  // no algoritmo de Places.
+  const variations: string[] = [];
+  for (const term of terms) {
+    variations.push(`${term} em ${location}`);
+    variations.push(`${term} ${location}`);
+  }
+  // "melhores X em Y" puxa resultados ranqueados diferente
+  if (terms.length > 0) {
+    variations.push(`melhores ${terms[0]} em ${location}`);
+  }
+
+  return Array.from(new Set(variations));
 }
 
 function normalize(value: string) {

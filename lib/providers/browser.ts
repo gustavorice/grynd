@@ -10,38 +10,33 @@ const LOCAL_BROWSER_PATHS = [
   "/usr/bin/chromium-browser"
 ];
 
-const SERVERLESS_ARGS_EXTRA = [
+// Args adicionais pra rodar headless em serverless.
+const SERVERLESS_EXTRA_ARGS = [
   "--disable-blink-features=AutomationControlled",
-  "--no-sandbox"
+  "--no-sandbox",
+  "--disable-dev-shm-usage",
+  "--disable-gpu",
+  "--single-process",
+  "--no-zygote"
 ];
 
 const LOCAL_ARGS = ["--disable-blink-features=AutomationControlled", "--no-sandbox"];
 
+const isServerless = (): boolean =>
+  Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+
 /**
- * Detecta o ambiente:
- * - Vercel / AWS Lambda → usa @sparticuz/chromium (Chromium otimizado pra serverless)
- * - Local (dev / Fly.io com Playwright base image) → usa Chrome/Edge instalado
+ * Lança um browser Playwright. Detecta ambiente:
+ * - Vercel / AWS Lambda → @sparticuz/chromium (Chromium otimizado pra serverless)
+ * - Local → Chrome/Edge instalado
+ *
+ * Faz retry uma vez se o launch falhar (cold start pode demorar).
  */
 export async function launchBrowser() {
   const { chromium } = await import("playwright-core");
-  const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
 
-  if (isServerless) {
-    try {
-      const sparticuz = (await import("@sparticuz/chromium")).default;
-      const executablePath = await sparticuz.executablePath();
-      console.log("[browser] serverless, executablePath:", executablePath);
-      return await chromium.launch({
-        args: [...sparticuz.args, ...SERVERLESS_ARGS_EXTRA],
-        executablePath,
-        headless: true
-      });
-    } catch (err) {
-      console.error("[browser] serverless launch failed:", err);
-      throw new Error(
-        `Falha ao iniciar Chromium serverless: ${err instanceof Error ? err.message : String(err)}`
-      );
-    }
+  if (isServerless()) {
+    return launchServerless(chromium);
   }
 
   const executablePath = LOCAL_BROWSER_PATHS.find((item) => existsSync(item));
@@ -51,4 +46,53 @@ export async function launchBrowser() {
     );
   }
   return chromium.launch({ executablePath, headless: true, args: LOCAL_ARGS });
+}
+
+async function launchServerless(chromium: typeof import("playwright-core").chromium) {
+  const sparticuz = (await import("@sparticuz/chromium")).default;
+
+  // Pré-aquece o binário do Chromium em /tmp — Vercel reaproveita entre invocações.
+  const t0 = Date.now();
+  let executablePath: string;
+  try {
+    executablePath = await sparticuz.executablePath();
+    console.log(
+      "[browser] sparticuz executable resolved in",
+      Date.now() - t0,
+      "ms ::",
+      executablePath
+    );
+  } catch (err) {
+    console.error("[browser] sparticuz executablePath failed:", err);
+    throw new Error(
+      `Chromium binary não disponível: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
+
+  // Args do sparticuz + nossos extras pra estabilidade.
+  const args = Array.from(new Set([...sparticuz.args, ...SERVERLESS_EXTRA_ARGS]));
+
+  // Tenta launch. Se falhar, espera 1s e tenta de novo.
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const t1 = Date.now();
+      const browser = await chromium.launch({
+        args,
+        executablePath,
+        headless: true,
+        timeout: 45000 // mais tempo pra Vercel cold start
+      });
+      console.log("[browser] launch ok attempt", attempt, "in", Date.now() - t1, "ms");
+      return browser;
+    } catch (err) {
+      console.error("[browser] launch attempt", attempt, "failed:", err);
+      if (attempt === 2) {
+        throw new Error(
+          `Falha ao iniciar Chromium serverless após 2 tentativas: ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+  }
+  throw new Error("unreachable");
 }

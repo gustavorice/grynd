@@ -19,6 +19,26 @@ const nextConfig: NextConfig = {
   ],
   // Headers de segurança.
   async headers() {
+    // CSP: allowlist explícito pros providers que carregam JS/imagens externos.
+    // - Clerk: scripts + frames pra fluxo de auth
+    // - Stripe: scripts + frames pro checkout/portal
+    // - Vercel Analytics: opcional, já incluso no Pro
+    const csp = [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.clerk.accounts.dev https://clerk.grynd.com.br https://js.stripe.com https://challenges.cloudflare.com https://va.vercel-scripts.com",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "font-src 'self' data: https://fonts.gstatic.com",
+      "img-src 'self' data: blob: https: ",
+      "connect-src 'self' https://*.clerk.accounts.dev https://clerk.grynd.com.br https://api.stripe.com https://*.upstash.io https://*.neon.tech https://nominatim.openstreetmap.org https://overpass-api.de https://places.googleapis.com https://serpapi.com https://va.vercel-scripts.com",
+      "frame-src https://*.clerk.accounts.dev https://challenges.cloudflare.com https://js.stripe.com https://hooks.stripe.com",
+      "worker-src 'self' blob:",
+      "object-src 'none'",
+      "base-uri 'self'",
+      "form-action 'self' https://checkout.stripe.com",
+      "frame-ancestors 'none'",
+      "upgrade-insecure-requests"
+    ].join("; ");
+
     return [
       {
         source: "/(.*)",
@@ -26,7 +46,8 @@ const nextConfig: NextConfig = {
           { key: "X-Frame-Options", value: "DENY" },
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" }
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+          { key: "Content-Security-Policy", value: csp }
         ]
       },
       {

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { AuthError, getOrSyncUser } from "@/lib/auth";
 import { readProfile, saveProfile } from "@/lib/profile";
+import { enforceApiLimit } from "@/lib/rate-limit";
 
 const ProfileSchema = z.object({
   brandName: z.string().min(1).max(60).optional(),
@@ -23,6 +24,8 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const user = await getOrSyncUser();
+    const limited = await enforceApiLimit(user.id);
+    if (limited) return limited;
     const body = ProfileSchema.parse(await request.json());
     const profile = await saveProfile(user.id, body);
     return NextResponse.json({ profile });

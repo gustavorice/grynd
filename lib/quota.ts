@@ -73,38 +73,46 @@ export async function getOrCreateQuota(userId: string): Promise<QuotaSnapshot> {
 }
 
 /**
- * Tenta consumir N buscas. Retorna o snapshot atualizado.
+ * Tenta consumir N buscas atomicamente.
+ *
+ * O UPDATE inclui um WHERE que SÓ aplica se ainda houver quota disponível
+ * (incluído + addon >= amount). Isso previne race condition: se 2 requests
+ * paralelas tentarem consumir o último crédito, só uma vai conseguir.
+ *
  * Lança QuotaError se exceder.
  */
 export async function consumeSearch(userId: string, amount = 1): Promise<QuotaSnapshot> {
   const q = await getOrCreateQuota(userId);
-  if (q.searchesAvailable < amount) {
+
+  // UPDATE atômico: só consome se ainda há saldo (validado no SQL, não em JS)
+  const updated = await db
+    .update(searchQuota)
+    .set({
+      // Consume primeiro do incluído. Se ultrapassar, o excesso vira addon usado.
+      searchesUsed: sql`LEAST(${searchQuota.searchesIncluded}, ${searchQuota.searchesUsed} + ${amount})`,
+      addonRemaining: sql`${searchQuota.addonRemaining} - GREATEST(0, ${amount} - (${searchQuota.searchesIncluded} - ${searchQuota.searchesUsed}))`,
+      updatedAt: new Date()
+    })
+    .where(
+      and(
+        eq(searchQuota.userId, userId),
+        eq(searchQuota.periodStart, q.periodStart),
+        // GUARDA: só executa se há saldo (race-safe)
+        sql`(${searchQuota.searchesIncluded} - ${searchQuota.searchesUsed} + ${searchQuota.addonRemaining}) >= ${amount}`
+      )
+    )
+    .returning();
+
+  if (updated.length === 0) {
+    // Outra request já consumiu o saldo — retorna QuotaError
     throw new QuotaError(
-      `Limite de buscas mensais atingido (${q.searchesUsed}/${q.searchesIncluded}). Faca upgrade ou compre +200 buscas.`,
+      `Limite de leads mensais atingido (${q.searchesUsed}/${q.searchesIncluded}). Faça upgrade ou compre +200 leads.`,
       q.searchesAvailable,
       q.plan
     );
   }
 
-  // Estratégia: consome primeiro do incluído, depois do addon.
-  const fromIncluded = Math.min(amount, q.searchesIncluded - q.searchesUsed);
-  const fromAddon = amount - fromIncluded;
-
-  await db
-    .update(searchQuota)
-    .set({
-      searchesUsed: sql`${searchQuota.searchesUsed} + ${fromIncluded}`,
-      addonRemaining: sql`${searchQuota.addonRemaining} - ${fromAddon}`,
-      updatedAt: new Date()
-    })
-    .where(and(eq(searchQuota.userId, userId), eq(searchQuota.periodStart, q.periodStart)));
-
-  return {
-    ...q,
-    searchesUsed: q.searchesUsed + fromIncluded,
-    addonRemaining: q.addonRemaining - fromAddon,
-    searchesAvailable: q.searchesAvailable - amount
-  };
+  return snapshot(q.plan, updated[0]);
 }
 
 /**

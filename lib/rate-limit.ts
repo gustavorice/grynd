@@ -57,3 +57,25 @@ export async function checkRate(
   const result = await limit.limit(identifier);
   return { ok: result.success, remaining: result.remaining, reset: result.reset };
 }
+
+import { NextResponse } from "next/server";
+
+/**
+ * Helper: aplica rate limit genérico em rotas autenticadas. Retorna null
+ * se OK, ou um NextResponse 429 já formatado se exceder.
+ *
+ * Uso:
+ *   const limited = await enforceApiLimit(user.id);
+ *   if (limited) return limited;
+ */
+export async function enforceApiLimit(userId: string): Promise<NextResponse | null> {
+  const rate = await checkRate(apiRateLimit(), `user:${userId}`);
+  if (rate.ok) return null;
+  return NextResponse.json(
+    {
+      error: "Muitas requisições em pouco tempo. Aguarde alguns segundos.",
+      resetAt: rate.reset
+    },
+    { status: 429 }
+  );
+}

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { AuthError, getOrSyncUser } from "@/lib/auth";
+import { enforceApiLimit } from "@/lib/rate-limit";
 import { deleteLead, readLeads, updateLeadStatus, upsertLead } from "@/lib/store";
 import type { Lead } from "@/lib/types";
 
@@ -23,6 +24,8 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const user = await getOrSyncUser();
+    const limited = await enforceApiLimit(user.id);
+    if (limited) return limited;
     const lead = LeadSchema.parse(await request.json());
     const saved = await upsertLead(user.id, {
       ...lead,
@@ -37,6 +40,8 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   try {
     const user = await getOrSyncUser();
+    const limited = await enforceApiLimit(user.id);
+    if (limited) return limited;
     const { id, status } = PatchSchema.parse(await request.json());
     const lead = await updateLeadStatus(user.id, id, status);
     return NextResponse.json({ lead });
@@ -48,6 +53,8 @@ export async function PATCH(request: Request) {
 export async function DELETE(request: Request) {
   try {
     const user = await getOrSyncUser();
+    const limited = await enforceApiLimit(user.id);
+    if (limited) return limited;
     const { id } = z.object({ id: z.string() }).parse(await request.json());
     return NextResponse.json(await deleteLead(user.id, id));
   } catch (error) {

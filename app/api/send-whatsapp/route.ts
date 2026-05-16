@@ -8,6 +8,7 @@ import { AuthError, getOrSyncUser } from "@/lib/auth";
 import { normalizeBrazilPhone } from "@/lib/phone";
 import { PLANS, type PlanId } from "@/lib/plans";
 import { scrapeGoogleMapsContact } from "@/lib/providers/google-maps-scrape";
+import { enforceApiLimit } from "@/lib/rate-limit";
 import { upsertLead } from "@/lib/store";
 import type { Lead } from "@/lib/types";
 
@@ -20,6 +21,8 @@ const SendSchema = z.object({
 export async function POST(request: Request) {
   try {
     const user = await getOrSyncUser();
+    const limited = await enforceApiLimit(user.id);
+    if (limited) return limited;
     const plan = PLANS[user.plan as PlanId];
     const { lead, to, text } = SendSchema.parse(await request.json());
 

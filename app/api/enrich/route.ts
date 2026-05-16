@@ -3,6 +3,7 @@ import { z } from "zod";
 import { AuthError, getOrSyncUser } from "@/lib/auth";
 import { diagnoseLead } from "@/lib/diagnose";
 import { enrichFromWebsite } from "@/lib/enrich";
+import { enforceApiLimit } from "@/lib/rate-limit";
 import { readLeads, upsertLeads } from "@/lib/store";
 import type { Lead } from "@/lib/types";
 
@@ -14,6 +15,8 @@ const EnrichSchema = z.object({
 export async function POST(request: Request) {
   try {
     const user = await getOrSyncUser();
+    const limited = await enforceApiLimit(user.id);
+    if (limited) return limited;
     const { id, lead: payloadLead } = EnrichSchema.parse(await request.json());
     const lead =
       payloadLead ?? (await readLeads(user.id)).find((item) => item.id === id);

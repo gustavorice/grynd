@@ -9,7 +9,9 @@ const isPublicRoute = createRouteMatcher([
   "/sign-up(.*)",
   "/api/stripe/webhook",
   "/api/health",
-  "/api/cron/(.*)"
+  "/api/cron/(.*)",
+  "/robots.txt",
+  "/sitemap.xml"
 ]);
 
 const isProtectedApiRoute = createRouteMatcher([

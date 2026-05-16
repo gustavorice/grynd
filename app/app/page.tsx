@@ -631,44 +631,42 @@ export default function Home() {
               </span>
             </div>
 
-            <div className="toolbar glassPanel">
-              <div className="toolbarTitle">
-                <SlidersHorizontal size={17} />
-                Filtros
-              </div>
-              <div className="filterBlock">
-                <span>Porte</span>
-                <div className="filterGroup">
-                  {(["all", "pequena", "media", "grande"] as SizeFilter[]).map((item) => (
-                    <button className={sizeFilter === item ? "activeFilter" : ""} key={item} onClick={() => setSizeFilter(item)} type="button">
-                      {item === "all" ? "Todos" : sizeLabels[item]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="filterBlock">
-                <span>Dados</span>
-                <div className="filterGroup">
-                  {(["all", "whatsapp", "social", "site"] as DataFilter[]).map((item) => (
-                    <button className={dataFilter === item ? "activeFilter" : ""} key={item} onClick={() => setDataFilter(item)} type="button">
-                      {dataLabel(item)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="iconFilters">
-                <button className={statusFilter === "all" ? "activeIcon" : ""} title="Todos" onClick={() => setStatusFilter("all")} type="button">
-                  <Building2 size={16} />
-                </button>
-                <button className={statusFilter === "saved" ? "activeIcon" : ""} title="Salvos" onClick={() => setStatusFilter("saved")} type="button">
-                  <Bookmark size={16} />
-                </button>
-                <button className={statusFilter === "sent" ? "activeIcon" : ""} title="Enviados" onClick={() => setStatusFilter("sent")} type="button">
-                  <Send size={16} />
-                </button>
-                <button className={statusFilter === "contacted" ? "activeIcon" : ""} title="Contatados" onClick={() => setStatusFilter("contacted")} type="button">
-                  <CheckCircle2 size={16} />
-                </button>
+            <div className="filterBar glassPanel">
+              <div className="filterBar-groups">
+                <FilterGroup
+                  label="Porte"
+                  options={[
+                    { value: "all", label: "Todos" },
+                    { value: "pequena", label: "P" },
+                    { value: "media", label: "M" },
+                    { value: "grande", label: "G" }
+                  ]}
+                  value={sizeFilter}
+                  onChange={(v) => setSizeFilter(v as SizeFilter)}
+                />
+                <FilterGroup
+                  label="Dados"
+                  options={[
+                    { value: "all", label: "Todos" },
+                    { value: "whatsapp", label: "WhatsApp" },
+                    { value: "social", label: "Social" },
+                    { value: "site", label: "Site" }
+                  ]}
+                  value={dataFilter}
+                  onChange={(v) => setDataFilter(v as DataFilter)}
+                />
+                <FilterGroup
+                  label="Status"
+                  iconMode
+                  options={[
+                    { value: "all", label: "Todos", icon: <Building2 size={14} /> },
+                    { value: "saved", label: "Salvos", icon: <Bookmark size={14} /> },
+                    { value: "sent", label: "Enviados", icon: <Send size={14} /> },
+                    { value: "contacted", label: "Contatados", icon: <CheckCircle2 size={14} /> }
+                  ]}
+                  value={statusFilter}
+                  onChange={(v) => setStatusFilter(v as StatusFilter)}
+                />
               </div>
               <button
                 className="exportButton"
@@ -681,8 +679,8 @@ export default function Home() {
                     : `Exportar ${filteredLeads.length} leads filtrados pra CSV`
                 }
               >
-                <Download size={15} />
-                Exportar CSV
+                <Download size={14} />
+                <span>Exportar CSV</span>
                 {filteredLeads.length > 0 && (
                   <span className="exportButton-count">{filteredLeads.length}</span>
                 )}
@@ -755,6 +753,41 @@ export default function Home() {
 
       <SupportWidget />
     </main>
+  );
+}
+
+function FilterGroup({
+  label,
+  options,
+  value,
+  onChange,
+  iconMode = false
+}: {
+  label: string;
+  options: { value: string; label: string; icon?: React.ReactNode }[];
+  value: string;
+  onChange: (v: string) => void;
+  iconMode?: boolean;
+}) {
+  return (
+    <div className="filterGroup-wrap">
+      <span className="filterGroup-label">{label}</span>
+      <div className={`segmented${iconMode ? " segmented-icon" : ""}`}>
+        {options.map((opt) => (
+          <button
+            key={opt.value}
+            type="button"
+            className={`segmented-item${value === opt.value ? " is-active" : ""}`}
+            onClick={() => onChange(opt.value)}
+            title={iconMode ? opt.label : undefined}
+            aria-label={iconMode ? opt.label : undefined}
+          >
+            {opt.icon}
+            {iconMode ? null : opt.label}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 

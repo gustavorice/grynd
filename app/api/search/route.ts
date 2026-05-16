@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-// Vercel Pro permite até 300s; Hobby até 10s. Pro precisa pelo menos 60 pro scraping.
-export const maxDuration = 60;
+// Vercel Pro permite até 300s; deep scrape pode demorar com muitas queries.
+export const maxDuration = 300;
 export const runtime = "nodejs";
 import { AuthError, getOrSyncUser } from "@/lib/auth";
 import { db } from "@/lib/db/client";
@@ -76,7 +76,12 @@ export async function POST(request: Request) {
 
     // Pra cada localização, dispara as 3 buscas em paralelo. Em modo deep
     // com várias localizações, isso pode escalar — limitamos extraLocations a 5.
-    type PerLocationResult = { places: Lead[]; osm: Lead[]; scrape: Lead[] };
+    type PerLocationResult = {
+      places: Lead[];
+      osm: Lead[];
+      scrape: Lead[];
+      errors: string[];
+    };
     const allResults: PerLocationResult[] = await Promise.all(
       locations.map(async (loc): Promise<PerLocationResult> => {
         const locParams = { ...params, location: loc, limit: perLocationLimit };
@@ -85,10 +90,27 @@ export async function POST(request: Request) {
           searchOpenStreetMap({ ...locParams, enrich: false }),
           params.mode === "deep" ? searchGoogleMapsScrape(locParams) : Promise.resolve([] as Lead[])
         ]);
+        const errors: string[] = [];
+        if (places.status === "rejected") {
+          const msg = places.reason instanceof Error ? places.reason.message : String(places.reason);
+          errors.push(`places(${loc}): ${msg}`);
+          console.error("[search] places falhou pra", loc, places.reason);
+        }
+        if (osm.status === "rejected") {
+          const msg = osm.reason instanceof Error ? osm.reason.message : String(osm.reason);
+          errors.push(`osm(${loc}): ${msg}`);
+          console.error("[search] osm falhou pra", loc, osm.reason);
+        }
+        if (scrape.status === "rejected") {
+          const msg = scrape.reason instanceof Error ? scrape.reason.message : String(scrape.reason);
+          errors.push(`scrape(${loc}): ${msg}`);
+          console.error("[search] scrape falhou pra", loc, scrape.reason);
+        }
         return {
           places: places.status === "fulfilled" ? (places.value ?? []) : [],
           osm: osm.status === "fulfilled" ? osm.value : [],
-          scrape: scrape.status === "fulfilled" ? scrape.value : []
+          scrape: scrape.status === "fulfilled" ? scrape.value : [],
+          errors
         };
       })
     );
@@ -96,6 +118,7 @@ export async function POST(request: Request) {
     const googleLeads: Lead[] = allResults.flatMap((r) => r.places);
     const osmLeads: Lead[] = allResults.flatMap((r) => r.osm);
     const scrapedLeads: Lead[] = allResults.flatMap((r) => r.scrape);
+    const sourceErrors = allResults.flatMap((r) => r.errors);
     let leads = mergeSources([googleLeads, scrapedLeads, osmLeads], params.limit);
 
     if (!leads.length) {
@@ -117,10 +140,17 @@ export async function POST(request: Request) {
     await logHistory(user.id, params, leads.length, false, Date.now() - t0);
 
     const remaining = quota.searchesAvailable - leads.length;
-    const coverageNote =
+    const baseNote =
       remaining <= 0
         ? `Quota mensal atingida com essa busca (${quota.searchesIncluded} leads). Próxima recarga na renovação do plano.`
         : `${leads.length} leads consumidos da sua quota. Restam ${remaining} este mês.`;
+
+    // Se modo deep e scrape não trouxe nada + houve erro, sinaliza pra UI
+    const scrapeIssue =
+      params.mode === "deep" && scrapedLeads.length === 0 && sourceErrors.some((e) => e.startsWith("scrape"))
+        ? ` (Aviso: varredura ampla indisponível neste momento — primeiro erro: ${sourceErrors.find((e) => e.startsWith("scrape"))})`
+        : "";
+    const coverageNote = baseNote + scrapeIssue;
 
     return NextResponse.json({
       leads,

@@ -27,13 +27,21 @@ export async function launchBrowser() {
   const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
 
   if (isServerless) {
-    const sparticuz = (await import("@sparticuz/chromium")).default;
-    const executablePath = await sparticuz.executablePath();
-    return chromium.launch({
-      args: [...sparticuz.args, ...SERVERLESS_ARGS_EXTRA],
-      executablePath,
-      headless: true
-    });
+    try {
+      const sparticuz = (await import("@sparticuz/chromium")).default;
+      const executablePath = await sparticuz.executablePath();
+      console.log("[browser] serverless, executablePath:", executablePath);
+      return await chromium.launch({
+        args: [...sparticuz.args, ...SERVERLESS_ARGS_EXTRA],
+        executablePath,
+        headless: true
+      });
+    } catch (err) {
+      console.error("[browser] serverless launch failed:", err);
+      throw new Error(
+        `Falha ao iniciar Chromium serverless: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
   }
 
   const executablePath = LOCAL_BROWSER_PATHS.find((item) => existsSync(item));

@@ -270,24 +270,17 @@ p {
 }
 
 .nav-logo {
-  color: var(--ink); /* SVG usa currentColor → vira branco */
   display: block;
   height: 30px;
   object-fit: contain;
   width: auto;
   max-width: 140px;
-  /* Fallback pra SVGs antigas com fill preto fixo */
-  filter: brightness(0) invert(1);
 }
 
 .auth-brand .nav-logo {
   height: 38px;
 }
 
-.brandLogo {
-  color: var(--ink);
-  filter: brightness(0) invert(1);
-}
 
 .nav-links {
   align-items: center;
@@ -1726,9 +1719,7 @@ p {
 }
 
 .brandLogo {
-  color: var(--ink);
   display: block;
-  filter: brightness(0) invert(1);
   height: 32px;
   object-fit: contain;
   max-width: 140px;

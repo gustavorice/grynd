@@ -241,7 +241,7 @@ export default async function LandingPage() {
       <footer className="lp-footer">
         <div className="lp-footer-inner">
           <Link href="/" className="nav-brand" aria-label="Grynd">
-            <img src="/grynd-logo.svg" alt="Grynd" className="nav-logo" />
+            <img src="/grynd-logo.png" alt="Grynd" className="nav-logo" />
           </Link>
           <nav className="lp-footer-nav">
             <Link href="/#features">Features</Link>

@@ -418,7 +418,7 @@ export default function Home() {
     <main className="appShell">
       <header className="appHeader">
         <button className="brandText" type="button" onClick={() => setView("search")} aria-label="Grynd">
-          <img className="brandLogo" src="/grynd-logo.svg" alt="Grynd" />
+          <img className="brandLogo" src="/grynd-logo.png" alt="Grynd" />
         </button>
         <nav className="navTabs">
           <NavButton active={view === "search"} icon={<Search size={16} />} label="Busca" onClick={() => setView("search")} />

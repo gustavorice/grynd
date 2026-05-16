@@ -1,11 +1,12 @@
 import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { ArrowRight, Check, Minus, Plus } from "lucide-react";
+import { LandingNav } from "@/app/_components/LandingNav";
 import { ADDON_200_SEARCHES, PLANS } from "@/lib/plans";
 
 const FEATURE_ROWS: { label: string; values: [string, string, string] }[] = [
-  { label: "Buscas por mês", values: ["30", "500", "5.000"] },
-  { label: "Pacotes extras +200 buscas", values: ["—", "R$ 20 cada", "incluso"] },
+  { label: "Leads por mês", values: ["30", "3.500", "25.000"] },
+  { label: "Pacotes extras +200 leads", values: ["—", "R$ 20 cada", "incluso"] },
   { label: "Modo busca rápida", values: ["✓", "✓", "✓"] },
   { label: "Modo busca profunda", values: ["✓", "✓", "✓"] },
   { label: "AI Insights por mês", values: ["—", "10", "ilimitado"] },
@@ -19,7 +20,7 @@ export default async function PricingPage() {
   const { userId } = await auth();
   return (
     <main className="lp">
-      <PricingNav signedIn={Boolean(userId)} />
+      <LandingNav signedIn={Boolean(userId)} />
 
       <section className="lp-pricing-hero">
         <div className="lp-glow" aria-hidden />
@@ -59,7 +60,7 @@ export default async function PricingPage() {
                 <ul className="lp-price-features">
                   <li>
                     <Check size={14} />
-                    <span><strong>{plan.searchesPerMonth}</strong> buscas por mês</span>
+                    <span><strong>{plan.searchesPerMonth.toLocaleString("pt-BR")}</strong> leads por mês</span>
                   </li>
                   <li>
                     <Check size={14} />
@@ -84,7 +85,7 @@ export default async function PricingPage() {
                   {plan.addonAvailable && (
                     <li>
                       <Plus size={14} />
-                      Pacotes extras +200 buscas
+                      Pacotes extras +200 leads
                     </li>
                   )}
                 </ul>
@@ -108,10 +109,10 @@ export default async function PricingPage() {
 
         <div className="lp-addon">
           <div>
-            <h3>Pacote extra · +200 buscas</h3>
+            <h3>Pacote extra · +200 leads</h3>
             <p>
               Estourou a quota do Pro no meio do mês? Compra um pacote por
-              <strong> R$ {ADDON_200_SEARCHES.priceCents / 100}</strong> e segue. Buscas não usadas
+              <strong> R$ {ADDON_200_SEARCHES.priceCents / 100}</strong> e segue. Leads não usados
               não expiram.
             </p>
           </div>
@@ -165,7 +166,7 @@ export default async function PricingPage() {
           </details>
           <details>
             <summary>Posso usar pra agência atendendo vários clientes?</summary>
-            <p>O plano Agência é desenhado pra isso: 5.000 buscas/mês, AI ilimitado, API e WhatsApp Cloud verificada.</p>
+            <p>O plano Agência é desenhado pra isso: 25.000 leads/mês, AI ilimitado, API e WhatsApp Cloud verificada.</p>
           </details>
           <details>
             <summary>Como funciona o WhatsApp Cloud API?</summary>
@@ -185,9 +186,9 @@ export default async function PricingPage() {
 
       <footer className="lp-footer">
         <div className="lp-footer-inner">
-          <Link href="/" className="lp-brand">
-            <span className="lp-brand-mark">G</span>
-            Grynd
+          <Link href="/" className="nav-brand">
+            <span className="nav-mark">G</span>
+            <span>Grynd</span>
           </Link>
           <nav className="lp-footer-nav">
             <Link href="/#features">Features</Link>
@@ -199,35 +200,5 @@ export default async function PricingPage() {
         </div>
       </footer>
     </main>
-  );
-}
-
-function PricingNav({ signedIn }: { signedIn: boolean }) {
-  return (
-    <div style={{ paddingTop: 18 }}>
-      <nav className="lp-nav">
-        <Link href="/" className="lp-brand">
-          <span className="lp-brand-mark">G</span>
-          Grynd
-        </Link>
-        <div className="lp-nav-center">
-          <Link href="/#features">Features</Link>
-          <Link href="/pricing" className="lp-nav-active">Planos</Link>
-          <Link href="/#faq">FAQ</Link>
-        </div>
-        <div className="lp-nav-right">
-          {signedIn ? (
-            <Link className="lp-nav-cta" href="/app">
-              Abrir app <ArrowRight size={14} />
-            </Link>
-          ) : (
-            <>
-              <Link href="/sign-in" className="lp-nav-link">Entrar</Link>
-              <Link href="/sign-up" className="lp-nav-cta">Criar conta</Link>
-            </>
-          )}
-        </div>
-      </nav>
-    </div>
   );
 }

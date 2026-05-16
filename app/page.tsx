@@ -15,6 +15,7 @@ import {
   Search,
   Target
 } from "lucide-react";
+import { LandingNav } from "@/app/_components/LandingNav";
 import { PLANS } from "@/lib/plans";
 
 export default async function LandingPage() {
@@ -49,7 +50,7 @@ export default async function LandingPage() {
               Ver planos
             </Link>
           </div>
-          <p className="lp-hero-trust">30 leads grátis · sem cartão · cancele a qualquer momento</p>
+          <p className="lp-hero-trust">30 leads no primeiro mês · sem cartão · cancele a qualquer momento</p>
         </div>
 
         <div className="lp-showcase">
@@ -64,18 +65,6 @@ export default async function LandingPage() {
         <Stat value="3-5s" label="Por busca rápida" />
       </section>
 
-      <section className="lp-stack">
-        <p className="lp-stack-label">Construído com</p>
-        <div className="lp-stack-logos">
-          <span>Next.js</span>
-          <span>Neon</span>
-          <span>Clerk</span>
-          <span>Stripe</span>
-          <span>Upstash</span>
-          <span>Fly.io</span>
-        </div>
-      </section>
-
       <section id="features" className="lp-section">
         <div className="lp-section-head">
           <span className="lp-section-eyebrow">Features</span>
@@ -88,8 +77,8 @@ export default async function LandingPage() {
         <div className="lp-features">
           <Feature
             icon={<Compass size={18} />}
-            title="Multi-fonte de verdade"
-            text="Google Maps e OpenStreetMap em paralelo, deduplicados por nome e coordenadas. Sem lead repetido."
+            title="Cobertura ampla"
+            text="Varredura paralela em múltiplas bases públicas, com deduplicação por nome e coordenadas. Sem lead repetido."
           />
           <Feature
             icon={<MessageCircle size={18} />}
@@ -175,7 +164,7 @@ export default async function LandingPage() {
                 <ul className="lp-price-features">
                   <li>
                     <Check size={14} />
-                    {plan.searchesPerMonth} buscas/mês
+                    {plan.searchesPerMonth.toLocaleString("pt-BR")} leads/mês
                   </li>
                   <li>
                     <Check size={14} />
@@ -213,7 +202,7 @@ export default async function LandingPage() {
             <summary>O que acontece se eu estourar a quota?</summary>
             <p>
               No Free, você espera o próximo mês ou faz upgrade. No Pro, compra pacotes extras
-              de +200 buscas por R$ 20 cada — buscas avulsas não expiram.
+              de +200 leads por R$ 20 cada — leads avulsos não expiram.
             </p>
           </details>
           <details>
@@ -226,15 +215,15 @@ export default async function LandingPage() {
           <details>
             <summary>De onde vêm os dados?</summary>
             <p>
-              Fontes públicas: Google Maps (scraping próprio) e OpenStreetMap. Não usamos
-              listas compradas nem extraímos de redes fechadas.
+              100% de fontes públicas. Não usamos listas compradas nem extraímos de redes
+              fechadas — só agregamos e enriquecemos o que já é público.
             </p>
           </details>
           <details>
             <summary>Vocês entregam o WhatsApp do lead?</summary>
             <p>
-              Quando o número está público no Maps ou no site, sim. O sistema normaliza pra
-              padrão brasileiro e valida o DDD. Quando não temos, mostramos claramente.
+              Quando o número está público, sim. O sistema normaliza pra padrão brasileiro e
+              valida o DDD. Quando não temos, mostramos claramente.
             </p>
           </details>
         </div>
@@ -251,9 +240,9 @@ export default async function LandingPage() {
 
       <footer className="lp-footer">
         <div className="lp-footer-inner">
-          <Link href="/" className="lp-brand">
-            <span className="lp-brand-mark">G</span>
-            Grynd
+          <Link href="/" className="nav-brand">
+            <span className="nav-mark">G</span>
+            <span>Grynd</span>
           </Link>
           <nav className="lp-footer-nav">
             <Link href="/#features">Features</Link>
@@ -265,40 +254,6 @@ export default async function LandingPage() {
         </div>
       </footer>
     </main>
-  );
-}
-
-function LandingNav({ signedIn }: { signedIn: boolean }) {
-  return (
-    <div style={{ paddingTop: 18 }}>
-      <nav className="lp-nav">
-        <Link href="/" className="lp-brand">
-          <span className="lp-brand-mark">G</span>
-          Grynd
-        </Link>
-        <div className="lp-nav-center">
-          <Link href="/#features">Features</Link>
-          <Link href="/pricing">Planos</Link>
-          <Link href="/#faq">FAQ</Link>
-        </div>
-        <div className="lp-nav-right">
-          {signedIn ? (
-            <Link className="lp-nav-cta" href="/app">
-              Abrir app <ArrowRight size={14} />
-            </Link>
-          ) : (
-            <>
-              <Link href="/sign-in" className="lp-nav-link">
-                Entrar
-              </Link>
-              <Link href="/sign-up" className="lp-nav-cta">
-                Criar conta
-              </Link>
-            </>
-          )}
-        </div>
-      </nav>
-    </div>
   );
 }
 
@@ -389,10 +344,10 @@ function ProductMockup() {
 }
 
 const MOCK_LEADS: { name: string; category: string; tag: string }[] = [
-  { name: "Gelato Borelli", category: "Sorveteria · Centro", tag: "Maps" },
-  { name: "Sorveteria Vila Bela", category: "Sorveteria · Vila Bela", tag: "Maps" },
-  { name: "Açaí da Praça", category: "Açaí · Boa Vista", tag: "OSM" },
-  { name: "Mil Sabores", category: "Sorveteria · São Benedito", tag: "Maps" },
-  { name: "Frooty Rio Claro", category: "Açaí · Centro", tag: "Maps" },
-  { name: "Tutti Frutti", category: "Sorveteria · Jardim", tag: "Maps" }
+  { name: "Gelato Borelli", category: "Sorveteria · Centro", tag: "Média" },
+  { name: "Sorveteria Vila Bela", category: "Sorveteria · Vila Bela", tag: "Pequena" },
+  { name: "Açaí da Praça", category: "Açaí · Boa Vista", tag: "Pequena" },
+  { name: "Mil Sabores", category: "Sorveteria · São Benedito", tag: "Média" },
+  { name: "Frooty Rio Claro", category: "Açaí · Centro", tag: "Grande" },
+  { name: "Tutti Frutti", category: "Sorveteria · Jardim", tag: "Pequena" }
 ];

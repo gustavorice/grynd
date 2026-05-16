@@ -1,12 +1,14 @@
 import { SignIn } from "@clerk/nextjs";
 import Link from "next/link";
+import { ClerkBadgeKiller } from "@/app/_components/ClerkBadgeKiller";
 
 export default function SignInPage() {
   return (
     <main className="auth-shell">
+      <ClerkBadgeKiller />
       <div className="auth-stack">
         <Link className="auth-brand" href="/">
-          <span className="lp-brand-mark">G</span>
+          <span className="nav-mark">G</span>
           Grynd
         </Link>
         <SignIn

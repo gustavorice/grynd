@@ -1,6 +1,6 @@
 "use client";
 
-import { UserButton } from "@clerk/nextjs";
+import { SignOutButton, UserButton } from "@clerk/nextjs";
 import {
   Bookmark,
   BookmarkCheck,
@@ -13,6 +13,7 @@ import {
   ExternalLink,
   Globe2,
   Instagram,
+  LogOut,
   Mail,
   MapPin,
   MessageCircle,
@@ -30,7 +31,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { Plan, PlanId } from "@/lib/plans";
 import type { CompanyProfile } from "@/lib/profile";
 import type { QuotaSnapshot } from "@/lib/quota";
-import type { CompanySize, Lead, LeadSource, LeadStatus, SearchResponse } from "@/lib/types";
+import type { CompanySize, Lead, LeadStatus, SearchResponse } from "@/lib/types";
 
 type Me = {
   user: { id: string; email: string; fullName: string | null; imageUrl: string | null; plan: PlanId };
@@ -38,7 +39,8 @@ type Me = {
   quota: QuotaSnapshot;
 };
 
-type ViewMode = "search" | "saved" | "profile" | "settings";
+type ViewMode = "search" | "saved" | "settings";
+type SettingsTab = "profile" | "ignored";
 type SizeFilter = "all" | CompanySize;
 type DataFilter = "all" | "whatsapp" | "social" | "site";
 type StatusFilter = "all" | "saved" | "sent" | "contacted";
@@ -49,12 +51,6 @@ const sizeLabels: Record<CompanySize, string> = {
   pequena: "Pequena",
   media: "Media",
   grande: "Grande"
-};
-
-const sourceLabels: Record<LeadSource, string> = {
-  google_places: "Places",
-  google_maps_scrape: "Maps",
-  openstreetmap: "OSM"
 };
 
 const DEFAULT_PROFILE: CompanyProfile = {
@@ -84,7 +80,7 @@ export default function Home() {
   useEffect(() => {
     void loadSavedLeads();
     void loadProfile();
-    void loadMe();
+    void bootstrapAndSync();
   }, []);
 
   async function loadMe() {
@@ -95,6 +91,64 @@ export default function Home() {
     } catch {
       // sem auth no dev — mantém null
     }
+  }
+
+  /**
+   * 1) Se vier de ?billing=success ou ?addon=success, sincroniza imediato.
+   * 2) Carrega /api/me.
+   * 3) Se o user logado ainda é Free, faz UMA tentativa de sync silencioso
+   *    como fallback (resgata pagamentos passados onde o webhook não chegou).
+   */
+  async function bootstrapAndSync() {
+    const params = new URLSearchParams(window.location.search);
+    const justUpgraded = params.get("billing") === "success";
+    const justBoughtAddon = params.get("addon") === "success";
+
+    if (justUpgraded || justBoughtAddon) {
+      setNotice(justUpgraded ? "Confirmando upgrade..." : "Confirmando compra do pacote...");
+      try {
+        await fetch("/api/stripe/sync", { method: "POST" });
+      } catch {
+        // mesmo se falhar, continua e tenta loadMe
+      }
+      window.history.replaceState({}, "", "/app");
+      setNotice(
+        justUpgraded ? "Plano atualizado!" : "Pacote de leads adicionado à sua quota."
+      );
+    }
+
+    const initial = await loadMeRaw();
+    if (initial) setMe(initial);
+
+    // Fallback: se ainda está como Free, tenta sincronizar uma vez (resgata
+    // pagamentos onde webhook não chegou e o user não voltou de ?billing=success).
+    if (initial?.user.plan === "free" && !sessionStorage.getItem("grynd_synced")) {
+      sessionStorage.setItem("grynd_synced", "1");
+      try {
+        const r = await fetch("/api/stripe/sync", { method: "POST" });
+        const data = await r.json();
+        if (data?.plan && data.plan !== "free") {
+          const updated = await loadMeRaw();
+          if (updated) {
+            setMe(updated);
+            setNotice(`Plano sincronizado: ${updated.plan.name}.`);
+          }
+        }
+      } catch {
+        // silencioso
+      }
+    }
+  }
+
+  async function loadMeRaw(): Promise<Me | null> {
+    try {
+      const response = await fetch("/api/me");
+      const data = await response.json();
+      if (data.user) return data;
+    } catch {
+      // sem auth no dev
+    }
+    return null;
   }
 
   async function startCheckout(plan: "pro" | "agency") {
@@ -127,10 +181,14 @@ export default function Home() {
   const savedById = useMemo(() => new Map(savedLeads.map((lead) => [lead.id, lead])), [savedLeads]);
 
   const baseLeads = useMemo(() => {
-    if (view === "settings") return savedLeads.filter((lead) => lead.status === "ignored");
     if (view === "saved") return savedLeads.filter((lead) => lead.status !== "ignored");
     return searchResults.map((lead) => savedById.get(lead.id) ?? lead).filter((lead) => lead.status !== "ignored");
   }, [savedById, savedLeads, searchResults, view]);
+
+  const ignoredLeads = useMemo(
+    () => savedLeads.filter((lead) => lead.status === "ignored"),
+    [savedLeads]
+  );
 
   const filteredLeads = useMemo(() => {
     return baseLeads.filter((lead) => {
@@ -172,11 +230,7 @@ export default function Home() {
   async function searchLeads(mode: "fast" | "deep" = "fast", refresh = false) {
     setLoading(true);
     setView("search");
-    setNotice(
-      mode === "deep"
-        ? "Busca profunda: varrendo Google Maps com scraping (15-25s)..."
-        : "Busca rapida: Google Places + OpenStreetMap em paralelo (3-6s)..."
-    );
+    setNotice(mode === "deep" ? "Busca profunda em andamento..." : "Buscando leads...");
     try {
       const response = await fetch("/api/search", {
         method: "POST",
@@ -185,11 +239,11 @@ export default function Home() {
       });
       const data = (await response.json()) as SearchResponse & { error?: string };
       if (response.status === 402) {
-        setNotice(data.error ?? "Limite de buscas atingido. Faca upgrade ou compre mais buscas.");
+        setNotice(data.error ?? "Limite de leads atingido. Faca upgrade ou compre +200 leads.");
         return;
       }
       if (response.status === 429) {
-        setNotice(data.error ?? "Muitas buscas em sequencia.");
+        setNotice(data.error ?? "Muitas buscas em sequencia. Aguarde alguns segundos.");
         return;
       }
       if (!response.ok) throw new Error(data.error);
@@ -322,8 +376,7 @@ export default function Home() {
         <nav className="navTabs">
           <NavButton active={view === "search"} icon={<Search size={16} />} label="Busca" onClick={() => setView("search")} />
           <NavButton active={view === "saved"} icon={<BookmarkCheck size={16} />} label="Leads salvos" onClick={() => setView("saved")} />
-          <NavButton active={view === "profile"} icon={<UserRound size={16} />} label="Perfil da empresa" onClick={() => setView("profile")} />
-          <NavButton active={view === "settings"} icon={<Settings2 size={16} />} label="Configuracoes" onClick={() => setView("settings")} />
+          <NavButton active={view === "settings"} icon={<Settings2 size={16} />} label="Configurações" onClick={() => setView("settings")} />
         </nav>
         <div className="userArea">
           {me && (
@@ -336,17 +389,30 @@ export default function Home() {
               {me.plan.id !== "free" && <Crown size={13} />}
               <span>{me.plan.name}</span>
               <span className="quotaCounter">
-                {me.quota.searchesUsed}/{me.quota.searchesIncluded}
-                {me.quota.addonRemaining > 0 ? ` +${me.quota.addonRemaining}` : ""}
+                {me.quota.searchesUsed.toLocaleString("pt-BR")}/{me.quota.searchesIncluded.toLocaleString("pt-BR")}
+                {me.quota.addonRemaining > 0 ? ` +${me.quota.addonRemaining.toLocaleString("pt-BR")}` : ""}
               </span>
             </button>
           )}
-          <UserButton afterSignOutUrl="/sign-in" />
+          <UserButton afterSignOutUrl="/sign-in" signInUrl="/sign-in" />
+          <SignOutButton redirectUrl="/sign-in">
+            <button className="signOutButton" type="button" title="Sair">
+              <LogOut size={15} />
+              <span>Sair</span>
+            </button>
+          </SignOutButton>
         </div>
       </header>
 
-      {view === "profile" ? (
-        <ProfileView profile={profile} onSave={setProfile} setNotice={setNotice} />
+      {view === "settings" ? (
+        <SettingsView
+          profile={profile}
+          onSaveProfile={setProfile}
+          setNotice={setNotice}
+          ignoredLeads={ignoredLeads}
+          onRestoreLead={(lead) => saveLead(lead, "saved")}
+          onDeleteLead={removeSaved}
+        />
       ) : (
         <section className="dashboardGrid">
           <aside className="searchCard glassPanel">
@@ -366,7 +432,7 @@ export default function Home() {
               {loading ? <RefreshCw className="spin" size={17} /> : <Search size={17} />}
               {loading ? "Buscando..." : "Busca rapida"}
             </button>
-            <button className="ghostButton" disabled={loading} onClick={() => void searchLeads("deep", false)} type="button" title="Inclui scraping do Google Maps (mais lento, mais leads)">
+            <button className="ghostButton" disabled={loading} onClick={() => void searchLeads("deep", false)} type="button" title="Varredura mais ampla (mais lento, mais leads)">
               <Search size={14} />
               Busca profunda
             </button>
@@ -377,7 +443,7 @@ export default function Home() {
             {me?.plan.addonAvailable && me.quota.searchesAvailable <= 50 && (
               <button className="addonButton" onClick={() => void startAddonCheckout()} type="button">
                 <Plus size={14} />
-                +200 buscas por R$ 20
+                +200 leads por R$ 20
               </button>
             )}
             {me?.plan.id === "free" && (
@@ -444,7 +510,7 @@ export default function Home() {
             <div className="leadList glassPanel">
               {filteredLeads.length === 0 ? (
                 <div className="emptyState">
-                  <strong>{view === "settings" ? "Nenhum ignorado" : "Nenhum lead nesta lista"}</strong>
+                  <strong>Nenhum lead nesta lista</strong>
                   <span>Busque outro nicho ou ajuste os filtros.</span>
                 </div>
               ) : (
@@ -456,7 +522,6 @@ export default function Home() {
                     </div>
                     <div className="leadBadges">
                       <span className={`sizeTag ${lead.companySize}`}>{sizeLabels[lead.companySize]}</span>
-                      <span className="sourceTag" title={`Origem: ${sourceLabels[lead.source]}`}>{sourceLabels[lead.source]}</span>
                       {(lead.whatsapp || lead.phone) && <Phone size={15} />}
                       {(lead.instagram || lead.facebook) && <Instagram size={15} />}
                       {lead.website && <Globe2 size={15} />}
@@ -592,11 +657,6 @@ function LeadDetails({
         )}
       </div>
 
-      {view === "settings" && (
-        <button className="restoreButton" onClick={() => onSave({ ...lead, status: "saved" })} type="button">
-          Restaurar lead
-        </button>
-      )}
     </aside>
   );
 }
@@ -618,7 +678,65 @@ function Info({ icon, value, href }: { icon: React.ReactNode; value?: string; hr
   );
 }
 
-function ProfileView({
+function SettingsView({
+  profile,
+  onSaveProfile,
+  setNotice,
+  ignoredLeads,
+  onRestoreLead,
+  onDeleteLead
+}: {
+  profile: CompanyProfile;
+  onSaveProfile: (profile: CompanyProfile) => void;
+  setNotice: (notice: string) => void;
+  ignoredLeads: Lead[];
+  onRestoreLead: (lead: Lead) => void;
+  onDeleteLead: (lead: Lead) => void;
+}) {
+  const [tab, setTab] = useState<SettingsTab>("profile");
+
+  return (
+    <section className="settingsLayout">
+      <aside className="settingsSidebar glassPanel">
+        <span className="sectionLabel">Configurações</span>
+        <h2>Conta</h2>
+        <nav className="settingsNav">
+          <button
+            type="button"
+            className={tab === "profile" ? "is-active" : ""}
+            onClick={() => setTab("profile")}
+          >
+            <UserRound size={16} />
+            Perfil da empresa
+          </button>
+          <button
+            type="button"
+            className={tab === "ignored" ? "is-active" : ""}
+            onClick={() => setTab("ignored")}
+          >
+            <CircleSlash size={16} />
+            Leads ignorados
+            {ignoredLeads.length > 0 && <span className="settingsBadge">{ignoredLeads.length}</span>}
+          </button>
+        </nav>
+      </aside>
+
+      <div className="settingsContent">
+        {tab === "profile" ? (
+          <ProfileForm profile={profile} onSave={onSaveProfile} setNotice={setNotice} />
+        ) : (
+          <IgnoredLeadsPanel
+            leads={ignoredLeads}
+            onRestore={onRestoreLead}
+            onDelete={onDeleteLead}
+          />
+        )}
+      </div>
+    </section>
+  );
+}
+
+function ProfileForm({
   profile,
   onSave,
   setNotice
@@ -655,37 +773,81 @@ function ProfileView({
   }
 
   return (
-    <section className="profileGrid">
-      <div className="glassPanel profileCard">
-        <span className="sectionLabel">Perfil da empresa</span>
-        <h1>{draft.brandName || "Sua marca"}</h1>
-        <p>Configure aqui o posicionamento usado nos insights e nas mensagens de abordagem.</p>
-        <label>
-          Nome da marca
-          <input value={draft.brandName} onChange={(event) => setDraft({ ...draft, brandName: event.target.value })} />
-        </label>
-        <label>
-          Oferta principal
-          <input value={draft.offer} onChange={(event) => setDraft({ ...draft, offer: event.target.value })} />
-        </label>
-        <label>
-          Regiao foco
-          <input value={draft.focusRegion} onChange={(event) => setDraft({ ...draft, focusRegion: event.target.value })} />
-        </label>
-        <label>
-          Tom da abordagem
-          <input value={draft.tone} onChange={(event) => setDraft({ ...draft, tone: event.target.value })} />
-        </label>
-        <label>
-          Assinatura (opcional)
-          <input value={draft.signature ?? ""} onChange={(event) => setDraft({ ...draft, signature: event.target.value })} placeholder="Ex: Gustavo - Grynd" />
-        </label>
-        <button className="primaryButton" disabled={saving} onClick={() => void persist()} type="button">
-          <Save size={16} />
-          {saving ? "Salvando..." : "Salvar perfil"}
-        </button>
-      </div>
-    </section>
+    <div className="glassPanel profileCard">
+      <span className="sectionLabel">Perfil da empresa</span>
+      <h2>{draft.brandName || "Sua marca"}</h2>
+      <p>Configure aqui o posicionamento usado nos insights e nas mensagens de abordagem.</p>
+      <label>
+        Nome da marca
+        <input value={draft.brandName} onChange={(event) => setDraft({ ...draft, brandName: event.target.value })} />
+      </label>
+      <label>
+        Oferta principal
+        <input value={draft.offer} onChange={(event) => setDraft({ ...draft, offer: event.target.value })} />
+      </label>
+      <label>
+        Região foco
+        <input value={draft.focusRegion} onChange={(event) => setDraft({ ...draft, focusRegion: event.target.value })} />
+      </label>
+      <label>
+        Tom da abordagem
+        <input value={draft.tone} onChange={(event) => setDraft({ ...draft, tone: event.target.value })} />
+      </label>
+      <label>
+        Assinatura (opcional)
+        <input value={draft.signature ?? ""} onChange={(event) => setDraft({ ...draft, signature: event.target.value })} placeholder="Ex: Gustavo - Grynd" />
+      </label>
+      <button className="primaryButton" disabled={saving} onClick={() => void persist()} type="button">
+        <Save size={16} />
+        {saving ? "Salvando..." : "Salvar perfil"}
+      </button>
+    </div>
+  );
+}
+
+function IgnoredLeadsPanel({
+  leads,
+  onRestore,
+  onDelete
+}: {
+  leads: Lead[];
+  onRestore: (lead: Lead) => void;
+  onDelete: (lead: Lead) => void;
+}) {
+  return (
+    <div className="glassPanel ignoredCard">
+      <span className="sectionLabel">Leads ignorados</span>
+      <h2>{leads.length} {leads.length === 1 ? "lead ignorado" : "leads ignorados"}</h2>
+      <p>Restaure pra voltar pros salvos, ou apague de vez. Ignorados ficam 90 dias antes de sumir automaticamente.</p>
+
+      {leads.length === 0 ? (
+        <div className="emptyState">
+          <strong>Nenhum lead ignorado</strong>
+          <span>Leads que você ignorar aparecerão aqui.</span>
+        </div>
+      ) : (
+        <ul className="ignoredList">
+          {leads.map((lead) => (
+            <li key={lead.id} className="ignoredItem">
+              <div>
+                <strong>{lead.name}</strong>
+                <span>{lead.category} · {lead.city}</span>
+              </div>
+              <div className="ignoredActions">
+                <button type="button" onClick={() => onRestore(lead)} title="Restaurar pra salvos">
+                  <RefreshCw size={14} />
+                  Restaurar
+                </button>
+                <button type="button" onClick={() => onDelete(lead)} title="Excluir permanentemente">
+                  <CircleSlash size={14} />
+                  Excluir
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -736,50 +898,99 @@ function openerByCompanySize(lead: Lead, brand: string) {
 }
 
 function buildLeadsCsv(leads: Lead[]): Blob {
+  // Ordem lógica pra prospecção: identificação → contato → web → metadados
   const headers = [
     "Nome",
     "Categoria",
-    "Nicho",
     "Porte",
-    "Score",
-    "Endereco",
-    "Cidade",
-    "Telefone",
     "WhatsApp",
+    "Telefone",
+    "Email",
     "Site",
     "Instagram",
     "Facebook",
-    "Email",
-    "Status",
-    "Origem",
-    "Maps",
+    "Endereco",
+    "Cidade",
+    "Score",
     "Avaliacao",
-    "Num avaliacoes"
+    "Avaliacoes",
+    "Status",
+    "Nicho",
+    "Maps"
   ];
+
+  // Formata telefone BR: 5519999999999 → +55 (19) 99999-9999
+  const formatPhone = (raw?: string) => {
+    if (!raw) return "";
+    const d = raw.replace(/\D/g, "");
+    if (d.length === 13 && d.startsWith("55")) {
+      return `+55 (${d.slice(2, 4)}) ${d.slice(4, 9)}-${d.slice(9)}`;
+    }
+    if (d.length === 12 && d.startsWith("55")) {
+      return `+55 (${d.slice(2, 4)}) ${d.slice(4, 8)}-${d.slice(8)}`;
+    }
+    if (d.length === 11) {
+      return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+    }
+    if (d.length === 10) {
+      return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+    }
+    return raw;
+  };
+
   const rows = leads.map((lead) => [
     lead.name,
     lead.category,
-    lead.niche,
     sizeLabels[lead.companySize],
-    String(lead.score ?? ""),
-    lead.address ?? "",
-    lead.city ?? "",
-    lead.phone ?? "",
-    lead.whatsapp ?? "",
+    formatPhone(lead.whatsapp),
+    formatPhone(lead.phone),
+    lead.email ?? "",
     lead.website ?? "",
     lead.instagram ?? "",
     lead.facebook ?? "",
-    lead.email ?? "",
-    lead.status,
-    sourceLabels[lead.source],
-    lead.mapsUrl ?? "",
-    lead.rating != null ? String(lead.rating) : "",
-    lead.reviewCount != null ? String(lead.reviewCount) : ""
+    lead.address ?? "",
+    lead.city ?? "",
+    String(lead.score ?? ""),
+    lead.rating != null ? lead.rating.toFixed(1).replace(".", ",") : "",
+    lead.reviewCount != null ? String(lead.reviewCount) : "",
+    statusLabel(lead.status),
+    lead.niche,
+    lead.mapsUrl ?? ""
   ]);
-  const escape = (value: string) => `"${value.replace(/"/g, '""')}"`;
-  const csv = [headers, ...rows].map((row) => row.map(escape).join(",")).join("\r\n");
-  // BOM pra Excel reconhecer UTF-8.
+
+  // Excel BR usa `;` como delimitador padrão. A primeira linha `sep=;` força
+  // Excel a interpretar corretamente independente da config regional do usuário.
+  const SEP = ";";
+  const escape = (value: string) => {
+    const safe = String(value ?? "");
+    // Quote sempre — evita problemas com ; , " \n em qualquer campo
+    return `"${safe.replace(/"/g, '""')}"`;
+  };
+  const csv = [
+    `sep=${SEP}`,
+    headers.map(escape).join(SEP),
+    ...rows.map((row) => row.map(escape).join(SEP))
+  ].join("\r\n");
+
+  // BOM UTF-8 pro Excel reconhecer acentos
   return new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+}
+
+function statusLabel(status: Lead["status"]): string {
+  switch (status) {
+    case "new":
+      return "Novo";
+    case "saved":
+      return "Salvo";
+    case "sent":
+      return "Enviado";
+    case "contacted":
+      return "Contatado";
+    case "ignored":
+      return "Ignorado";
+    default:
+      return status;
+  }
 }
 
 function closerByCompanySize(lead: Lead) {

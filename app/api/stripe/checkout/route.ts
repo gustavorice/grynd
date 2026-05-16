@@ -44,6 +44,24 @@ export async function POST(request: Request) {
       });
     }
 
+    // Previne checkout duplicado: se já tem subscription ativa, abre o portal
+    // ao invés de criar uma segunda assinatura paralela.
+    const activeSubs = await stripe.subscriptions.list({
+      customer: customerId,
+      status: "active",
+      limit: 5
+    });
+    if (activeSubs.data.length > 0) {
+      const portal = await stripe.billingPortal.sessions.create({
+        customer: customerId,
+        return_url: `${baseUrl}/app`
+      });
+      return NextResponse.json({
+        url: portal.url,
+        note: "Você já tem uma assinatura ativa — abrindo o portal pra gerenciar."
+      });
+    }
+
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       customer: customerId,
@@ -51,8 +69,8 @@ export async function POST(request: Request) {
       allow_promotion_codes: true,
       automatic_tax: { enabled: false },
       billing_address_collection: "auto",
-      success_url: `${baseUrl}/?billing=success`,
-      cancel_url: `${baseUrl}/?billing=canceled`,
+      success_url: `${baseUrl}/app?billing=success`,
+      cancel_url: `${baseUrl}/app?billing=canceled`,
       metadata: { userId: user.id, plan },
       subscription_data: {
         metadata: { userId: user.id, plan }

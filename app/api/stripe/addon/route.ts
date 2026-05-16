@@ -40,8 +40,8 @@ export async function POST(request: Request) {
         sku: ADDON_200_SEARCHES.id,
         searches: String(ADDON_200_SEARCHES.searches)
       },
-      success_url: `${baseUrl}/?addon=success`,
-      cancel_url: `${baseUrl}/?addon=canceled`
+      success_url: `${baseUrl}/app?addon=success`,
+      cancel_url: `${baseUrl}/app?addon=canceled`
     });
 
     return NextResponse.json({ url: session.url });

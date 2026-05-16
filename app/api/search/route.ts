@@ -6,7 +6,7 @@ import { searchHistory } from "@/lib/db/schema";
 import { searchGooglePlaces } from "@/lib/providers/google";
 import { searchGoogleMapsScrape } from "@/lib/providers/google-maps-scrape";
 import { searchOpenStreetMap } from "@/lib/providers/osm";
-import { QuotaError, consumeSearch } from "@/lib/quota";
+import { QuotaError, consumeSearch, getOrCreateQuota } from "@/lib/quota";
 import { checkRate, searchRateLimit } from "@/lib/rate-limit";
 import { cacheKey, readCache, writeCache } from "@/lib/search-cache";
 import type { Lead, LeadSource, SearchResponse } from "@/lib/types";
@@ -48,15 +48,22 @@ export async function POST(request: Request) {
         return NextResponse.json({
           leads: cached.leads,
           source: bestSource(cached.sources),
-          message: buildSourceMessage(cached.sources, true),
-          coverageNote:
-            "Resultado em cache (8 min). Use 'Busca profunda' pra forçar varredura nova mais ampla."
+          message: `${cached.leads.length} leads (resultado em cache).`,
+          coverageNote: "Resultado em cache de 8 min. Use 'Busca profunda' pra varredura mais ampla."
         } satisfies SearchResponse);
       }
     }
 
-    // Consome quota antes de gastar recurso de scraping.
-    await consumeSearch(user.id, 1);
+    // Checa quota ANTES de gastar recurso de scraping. Não consumimos ainda;
+    // só ao final, pelo número exato de leads retornados.
+    const quota = await getOrCreateQuota(user.id);
+    if (quota.searchesAvailable <= 0) {
+      throw new QuotaError(
+        `Limite de ${quota.searchesIncluded} leads do plano ${quota.plan} atingido. Faça upgrade ou compre +200 leads.`,
+        0,
+        quota.plan
+      );
+    }
 
     const [placesResult, osmResult, scrapeResult] = await Promise.allSettled([
       searchGooglePlaces(params),
@@ -67,11 +74,16 @@ export async function POST(request: Request) {
     const googleLeads = placesResult.status === "fulfilled" ? placesResult.value : null;
     const osmLeads = osmResult.status === "fulfilled" ? osmResult.value : [];
     const scrapedLeads = scrapeResult.status === "fulfilled" ? scrapeResult.value : [];
-    const leads = mergeSources([googleLeads ?? [], scrapedLeads, osmLeads], params.limit);
+    let leads = mergeSources([googleLeads ?? [], scrapedLeads, osmLeads], params.limit);
 
     if (!leads.length) {
       throw new Error("Nao encontrei leads nesse nicho/local com as fontes disponiveis.");
     }
+
+    // Trunca pelo que o usuário ainda tem na quota e consome esse exato volume.
+    const maxAllowed = Math.min(leads.length, quota.searchesAvailable);
+    leads = leads.slice(0, maxAllowed);
+    await consumeSearch(user.id, leads.length);
 
     const sources: Record<LeadSource, number> = {
       google_places: googleLeads?.length ?? 0,
@@ -82,12 +94,17 @@ export async function POST(request: Request) {
     writeCache(key, { leads, sources });
     await logHistory(user.id, params, leads.length, false, Date.now() - t0);
 
+    const remaining = quota.searchesAvailable - leads.length;
+    const coverageNote =
+      remaining <= 0
+        ? `Quota mensal atingida com essa busca (${quota.searchesIncluded} leads). Próxima recarga na renovação do plano.`
+        : `${leads.length} leads consumidos da sua quota. Restam ${remaining} este mês.`;
+
     return NextResponse.json({
       leads,
       source: bestSource(sources),
-      message: buildSourceMessage(sources, false),
-      coverageNote:
-        "Motor rapido: fontes em paralelo, termos equivalentes por nicho e deduplicacao. Resultado cacheado por 8 min."
+      message: `${leads.length} leads encontrados.`,
+      coverageNote
     } satisfies SearchResponse);
   } catch (error) {
     if (error instanceof AuthError) {
@@ -132,15 +149,6 @@ function bestSource(sources: Record<LeadSource, number>): LeadSource {
   return "openstreetmap";
 }
 
-function buildSourceMessage(sources: Record<LeadSource, number>, cached: boolean) {
-  const parts = [
-    sources.google_places ? `Google Places (${sources.google_places})` : undefined,
-    sources.google_maps_scrape ? `Google Maps scraping (${sources.google_maps_scrape})` : undefined,
-    sources.openstreetmap ? `OpenStreetMap (${sources.openstreetmap})` : undefined
-  ].filter(Boolean);
-  const prefix = cached ? "Cache:" : "Busca combinada:";
-  return `${prefix} ${parts.join(" + ")}.`;
-}
 
 function mergeSources(sourceLists: Lead[][], limit: number) {
   const byKey = new Map<string, Lead>();

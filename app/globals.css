@@ -99,15 +99,74 @@ p {
   position: relative;
 }
 
-/* --- subtle ambient glow (cinza, NÃO colorido) --- */
+/* --- ambient white sweep (luz branca passando, sutil) --- */
 
 .lp-glow {
-  background:
-    radial-gradient(ellipse 60% 40% at 50% 0%, rgba(255, 255, 255, 0.06), transparent 70%);
   inset: 0;
+  overflow: hidden;
   pointer-events: none;
   position: absolute;
   z-index: 0;
+}
+
+.lp-glow::before,
+.lp-glow::after {
+  background: radial-gradient(
+    ellipse 50% 60% at center,
+    rgba(255, 255, 255, 0.09),
+    rgba(255, 255, 255, 0.04) 40%,
+    transparent 70%
+  );
+  border-radius: 50%;
+  content: "";
+  filter: blur(60px);
+  height: 720px;
+  position: absolute;
+  width: 900px;
+  will-change: transform, opacity;
+}
+
+.lp-glow::before {
+  animation: glow-sweep-a 18s ease-in-out infinite alternate;
+  left: -20%;
+  top: -40%;
+}
+
+.lp-glow::after {
+  animation: glow-sweep-b 22s ease-in-out infinite alternate;
+  opacity: 0.7;
+  right: -20%;
+  top: -10%;
+}
+
+@keyframes glow-sweep-a {
+  0% {
+    opacity: 0.55;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: translate3d(20%, 8%, 0) scale(1.05);
+  }
+  100% {
+    opacity: 0.6;
+    transform: translate3d(40%, -4%, 0) scale(1.08);
+  }
+}
+
+@keyframes glow-sweep-b {
+  0% {
+    opacity: 0.4;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: translate3d(-15%, 10%, 0) scale(1.1);
+  }
+  100% {
+    opacity: 0.45;
+    transform: translate3d(-30%, -6%, 0) scale(1.04);
+  }
 }
 
 .lp-grid-bg {
@@ -122,45 +181,85 @@ p {
   z-index: 0;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .lp-glow::before,
+  .lp-glow::after {
+    animation: none;
+  }
+}
+
 /* --- nav (sticky pill no topo) --- */
 
-.lp-nav {
-  align-items: center;
-  backdrop-filter: blur(14px);
-  background: rgba(10, 10, 10, 0.7);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  display: grid;
-  gap: 24px;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  left: 50%;
-  margin: 0 auto;
-  max-width: 1120px;
-  min-height: 56px;
-  padding: 6px 8px 6px 18px;
+/* =========================================================
+   NAV (landing + pricing)
+   Estrutura HTML:
+     .nav-shell > .nav > [.nav-brand, .nav-center-stage > .nav-links, .nav-actions, .nav-burger]
+   Desktop: links absolute em wrapper full-width → centralização garantida.
+   Mobile:  hamburger abre drawer fullscreen.
+   ========================================================= */
+
+.nav-shell {
+  padding-top: 18px;
   position: sticky;
-  top: 18px;
-  transform: translateX(-50%);
-  width: calc(100% - 32px);
+  top: 0;
   z-index: 50;
 }
 
-.lp-brand {
+.nav {
+  align-items: center;
+  backdrop-filter: blur(14px);
+  background: rgba(10, 10, 10, 0.72);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  display: flex;
+  justify-content: space-between;
+  margin: 0 auto;
+  max-width: 1120px;
+  min-height: 56px;
+  padding: 6px 12px;
+  position: relative;
+  transition: background 240ms ease, border-color 240ms ease;
+  width: calc(100% - 32px);
+}
+
+.nav:hover {
+  border-color: var(--line-strong);
+}
+
+/* Wrapper invisível que ocupa 100% do nav e centraliza os links via flex.
+   Pointer-events none pra não bloquear hover/click dos vizinhos. */
+.nav-center-stage {
+  align-items: center;
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  pointer-events: none;
+  position: absolute;
+}
+
+.nav-brand {
   align-items: center;
   color: var(--ink);
   display: inline-flex;
-  font-size: 16px;
+  font-size: 15.5px;
   font-weight: 700;
   gap: 8px;
   letter-spacing: -0.02em;
+  position: relative; /* sobre o center-stage */
+  z-index: 2;
 }
 
-.lp-brand-mark {
+.nav-brand:hover {
+  color: var(--ink);
+}
+
+.nav-mark {
   align-items: center;
   background: var(--ink);
   border-radius: 7px;
   color: var(--accent-ink);
   display: inline-flex;
+  flex-shrink: 0;
   font-family: var(--font-mono);
   font-size: 13px;
   font-weight: 700;
@@ -170,45 +269,54 @@ p {
   width: 26px;
 }
 
-.lp-nav-center {
+.nav-links {
   align-items: center;
   display: flex;
   gap: 2px;
-  justify-content: center;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  pointer-events: auto;
 }
 
-.lp-nav-center a {
+.nav-links a {
   border-radius: 999px;
   color: var(--ink-muted);
+  display: inline-block;
   font-size: 13.5px;
   font-weight: 500;
-  padding: 7px 14px;
-  transition: color 160ms ease, background 160ms ease;
+  padding: 8px 14px;
+  position: relative;
+  transition: color 200ms ease, background 200ms ease;
 }
 
-.lp-nav-center a:hover,
-.lp-nav-active {
-  color: var(--ink) !important;
-}
-
-.lp-nav-right {
-  align-items: center;
-  display: flex;
-  gap: 4px;
-}
-
-.lp-nav-link {
-  color: var(--ink-muted);
-  font-size: 13.5px;
-  font-weight: 500;
-  padding: 7px 12px;
-}
-
-.lp-nav-link:hover {
+.nav-links a:hover,
+.nav-links a.is-active {
+  background: rgba(255, 255, 255, 0.05);
   color: var(--ink);
 }
 
-.lp-nav-cta {
+.nav-actions {
+  align-items: center;
+  display: flex;
+  gap: 4px;
+  position: relative;
+  z-index: 2;
+}
+
+.nav-link {
+  color: var(--ink-muted);
+  font-size: 13.5px;
+  font-weight: 500;
+  padding: 8px 12px;
+  transition: color 200ms ease;
+}
+
+.nav-link:hover {
+  color: var(--ink);
+}
+
+.nav-cta {
   align-items: center;
   background: var(--accent);
   border-radius: 999px;
@@ -221,11 +329,131 @@ p {
   letter-spacing: -0.01em;
   padding: 0 16px;
   transition: opacity 160ms ease, transform 160ms ease;
+  white-space: nowrap;
 }
 
-.lp-nav-cta:hover {
+.nav-cta:hover {
   opacity: 0.88;
   transform: translateY(-1px);
+}
+
+.nav-burger {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink);
+  display: none;
+  height: 40px;
+  justify-content: center;
+  padding: 0;
+  position: relative;
+  transition: border-color 200ms ease, background 200ms ease;
+  width: 40px;
+  z-index: 2;
+}
+
+.nav-burger:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--line-strong);
+}
+
+/* --- mobile drawer --- */
+
+.nav-drawer {
+  background: rgba(0, 0, 0, 0.92);
+  backdrop-filter: blur(20px);
+  display: none;
+  inset: 0;
+  padding: 96px 28px 28px;
+  position: fixed;
+  z-index: 49;
+}
+
+.nav-drawer.is-open {
+  animation: nav-drawer-in 240ms ease-out both;
+  display: grid;
+  gap: 28px;
+  grid-template-rows: 1fr auto;
+}
+
+@keyframes nav-drawer-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.nav-drawer ul {
+  display: grid;
+  gap: 4px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.nav-drawer a {
+  border-radius: 12px;
+  color: var(--ink);
+  display: block;
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  padding: 14px 16px;
+  transition: background 200ms ease;
+}
+
+.nav-drawer a:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.nav-drawer-actions {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 8px;
+  padding-top: 24px;
+}
+
+.nav-drawer-actions .nav-cta,
+.nav-drawer-actions .nav-link {
+  font-size: 15px;
+  height: 48px;
+  justify-content: center;
+  padding: 0 18px;
+  width: 100%;
+}
+
+.nav-drawer-actions .nav-link {
+  align-items: center;
+  border: 1px solid var(--line-stronger);
+  border-radius: 999px;
+  display: inline-flex;
+}
+
+/* --- breakpoint mobile --- */
+
+@media (max-width: 760px) {
+  .nav-shell {
+    padding-top: 14px;
+  }
+
+  .nav {
+    border-radius: 16px;
+    width: calc(100% - 24px);
+  }
+
+  .nav-center-stage,
+  .nav-actions {
+    display: none;
+  }
+
+  .nav-burger {
+    display: inline-flex;
+  }
 }
 
 /* --- shared pill --- */
@@ -344,24 +572,72 @@ p {
 }
 
 .lp-mock {
+  animation: lp-mock-reveal 1.2s ease-out 0.2s both;
   background: linear-gradient(180deg, var(--bg-elev-1), var(--bg-elev-2));
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   overflow: hidden;
   position: relative;
+  transition: border-color 240ms ease, transform 400ms ease;
 }
 
-.lp-mock::before {
-  background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.92));
-  bottom: 0;
+@keyframes lp-mock-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.lp-hero-inner > *:nth-child(1) { animation: lp-fade-up 0.6s ease-out 0s both; }
+.lp-hero-inner > *:nth-child(2) { animation: lp-fade-up 0.7s ease-out 0.05s both; }
+.lp-hero-inner > *:nth-child(3) { animation: lp-fade-up 0.7s ease-out 0.12s both; }
+.lp-hero-inner > *:nth-child(4) { animation: lp-fade-up 0.7s ease-out 0.18s both; }
+.lp-hero-inner > *:nth-child(5) { animation: lp-fade-up 0.7s ease-out 0.24s both; }
+
+@keyframes lp-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-mock,
+  .lp-hero-inner > * {
+    animation: none;
+  }
+}
+
+.lp-showcase {
+  position: relative;
+}
+
+/* Fade pra escurecer o final do mockup, fazendo ele "sumir" no fundo da página. */
+.lp-showcase::after {
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0) 0%,
+    rgba(0, 0, 0, 0.55) 45%,
+    rgba(0, 0, 0, 0.9) 75%,
+    var(--bg) 100%
+  );
+  bottom: -1px;
   content: "";
-  height: 35%;
+  height: 65%;
   left: 0;
+  pointer-events: none;
   position: absolute;
   right: 0;
-  pointer-events: none;
-  z-index: 2;
+  z-index: 3;
 }
 
 .lp-mock-bar {
@@ -522,12 +798,25 @@ p {
   text-align: center;
 }
 
+.lp-stat {
+  transition: transform 240ms ease;
+}
+
+.lp-stat:hover {
+  transform: translateY(-2px);
+}
+
 .lp-stat strong {
   display: block;
   font-family: var(--font-mono);
   font-size: 26px;
   font-weight: 500;
   letter-spacing: -0.04em;
+  transition: color 240ms ease;
+}
+
+.lp-stat:hover strong {
+  color: var(--ink);
 }
 
 .lp-stat span {
@@ -625,11 +914,17 @@ p {
 .lp-step {
   background: var(--bg-elev-1);
   padding: 32px;
-  transition: background 200ms ease;
+  transition: background 240ms ease, transform 240ms ease;
 }
 
 .lp-step:hover {
   background: var(--bg-elev-2);
+}
+
+.lp-step:hover .lp-step-num {
+  border-color: var(--ink);
+  color: var(--ink);
+  transition: border-color 240ms ease, color 240ms ease;
 }
 
 .lp-step-num {
@@ -675,11 +970,35 @@ p {
 .lp-feature {
   background: var(--bg-elev-1);
   padding: 32px;
-  transition: background 200ms ease;
+  position: relative;
+  transition: background 240ms ease;
+}
+
+.lp-feature::after {
+  background: linear-gradient(
+    180deg,
+    transparent 50%,
+    rgba(255, 255, 255, 0.04)
+  );
+  content: "";
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 280ms ease;
 }
 
 .lp-feature:hover {
   background: var(--bg-elev-2);
+}
+
+.lp-feature:hover::after {
+  opacity: 1;
+}
+
+.lp-feature:hover .lp-feature-icon {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--accent-ink);
 }
 
 .lp-feature-icon {
@@ -692,6 +1011,7 @@ p {
   height: 38px;
   justify-content: center;
   margin-bottom: 18px;
+  transition: background 240ms ease, border-color 240ms ease, color 240ms ease;
   width: 38px;
 }
 
@@ -725,11 +1045,13 @@ p {
   gap: 14px;
   padding: 32px;
   position: relative;
-  transition: border 200ms ease;
+  transition: border-color 240ms ease, transform 240ms ease, background 240ms ease;
 }
 
 .lp-price:hover {
+  background: var(--bg-elev-2);
   border-color: var(--line-strong);
+  transform: translateY(-2px);
 }
 
 .lp-price.is-featured {
@@ -856,6 +1178,12 @@ p {
   grid-template-columns: minmax(0, 1fr) auto;
   margin-top: 16px;
   padding: 24px 28px;
+  transition: border-color 240ms ease, background 240ms ease;
+}
+
+.lp-addon:hover {
+  background: var(--bg-elev-2);
+  border-color: var(--line-strong);
 }
 
 .lp-addon h3 {
@@ -1030,10 +1358,29 @@ p {
 .lp-footer-nav a {
   color: var(--ink-muted-2);
   font-size: 13px;
+  position: relative;
+  transition: color 200ms ease;
+}
+
+.lp-footer-nav a::after {
+  background: var(--ink);
+  bottom: -4px;
+  content: "";
+  height: 1px;
+  left: 0;
+  position: absolute;
+  right: 0;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 240ms ease;
 }
 
 .lp-footer-nav a:hover {
   color: var(--ink);
+}
+
+.lp-footer-nav a:hover::after {
+  transform: scaleX(1);
 }
 
 .lp-footer-copy {
@@ -1132,6 +1479,69 @@ p {
 
 .auth-foot a:hover {
   text-decoration: underline;
+}
+
+/* Força texto/ícones brancos no popup do UserButton (e em qualquer card dark do Clerk) */
+.cl-userButtonPopoverCard,
+.cl-userButtonPopoverCard *,
+.cl-userButtonPopoverActionButton,
+.cl-userButtonPopoverActionButton *,
+.cl-userButtonPopoverActionButtonText,
+.cl-userButtonPopoverActionButtonIcon,
+.cl-userPreviewMainIdentifier,
+.cl-userPreview .cl-userPreviewTextContainer * {
+  color: #fafafa !important;
+}
+
+.cl-userButtonPopoverActionButtonIcon svg,
+.cl-userButtonPopoverActionButton svg {
+  color: #fafafa !important;
+  stroke: #fafafa !important;
+}
+
+.cl-userPreviewSecondaryIdentifier {
+  color: #a1a1aa !important;
+}
+
+.cl-userButtonPopoverCard {
+  background: #0a0a0a !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+.cl-userButtonPopoverActionButton:hover {
+  background: rgba(255, 255, 255, 0.05) !important;
+}
+
+/* Garante que botões do popover são clicáveis (overrides defensivos) */
+.cl-userButtonPopoverActionButton,
+.cl-userButtonPopoverActionButton__signOut,
+.cl-userButtonPopoverActionButton__manageAccount {
+  cursor: pointer !important;
+  pointer-events: auto !important;
+}
+
+/* Esconde o badge "Development mode" + selo "Secured by Clerk" */
+.cl-internal-1dauvpw,
+.cl-internal-1rpdi70,
+.cl-internal-b3fm6y,
+.cl-internal-uyu30o,
+[class*="cl-internal-"][class*="developmentMode"],
+[data-localization-key="badge__developmentMode"],
+.cl-badge[data-localization-key="badge__developmentMode"],
+.cl-footer__developmentMode,
+.cl-developmentMode,
+.cl-developmentModeMark,
+.cl-poweredByClerk,
+.cl-internal-poweredby,
+[class*="poweredByClerk"],
+.cl-userButtonPopoverFooter {
+  display: none !important;
+}
+
+/* Fallback: o badge é sempre o último elemento dentro do card no Clerk dev */
+.cl-card > .cl-internal-b3fm6y,
+.cl-rootBox .cl-internal-b3fm6y {
+  display: none !important;
 }
 
 /* =========================================================
@@ -1240,6 +1650,27 @@ p {
 .planBadge.plan-agency {
   background: var(--bg-elev-3);
   border-color: var(--line-stronger);
+}
+
+.signOutButton {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink-muted);
+  display: inline-flex;
+  font-size: 12.5px;
+  font-weight: 500;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 12px;
+  transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+
+.signOutButton:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--line-strong);
+  color: var(--ink);
 }
 
 .quotaCounter {
@@ -1809,6 +2240,169 @@ input:focus {
   color: var(--ink-muted);
 }
 
+/* ====== Settings view (sidebar + content) ====== */
+
+.settingsLayout {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 260px minmax(0, 1fr);
+  margin: 0 auto;
+  max-width: 1120px;
+}
+
+.settingsSidebar {
+  align-content: start;
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+  position: sticky;
+  top: 22px;
+}
+
+.settingsSidebar h2 {
+  margin: 0;
+}
+
+.settingsNav {
+  display: grid;
+  gap: 4px;
+}
+
+.settingsNav button {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--ink-muted);
+  cursor: pointer;
+  display: flex;
+  font-size: 13.5px;
+  font-weight: 500;
+  gap: 10px;
+  letter-spacing: -0.01em;
+  min-height: 38px;
+  padding: 0 12px;
+  text-align: left;
+  transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
+  width: 100%;
+}
+
+.settingsNav button:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ink);
+}
+
+.settingsNav button.is-active {
+  background: var(--bg-elev-2);
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+.settingsBadge {
+  background: var(--bg-elev-3);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  margin-left: auto;
+  padding: 2px 7px;
+}
+
+.settingsContent {
+  display: grid;
+  min-width: 0;
+}
+
+.ignoredCard {
+  display: grid;
+  gap: 16px;
+  padding: 22px;
+}
+
+.ignoredCard p {
+  color: var(--ink-muted);
+}
+
+.ignoredList {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  display: grid;
+  list-style: none;
+  margin: 0;
+  overflow: hidden;
+  padding: 0;
+}
+
+.ignoredItem {
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 14px 18px;
+  transition: background 160ms ease;
+}
+
+.ignoredItem:last-child {
+  border-bottom: none;
+}
+
+.ignoredItem:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.ignoredItem strong {
+  color: var(--ink);
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.ignoredItem span {
+  color: var(--ink-muted-2);
+  font-size: 12.5px;
+}
+
+.ignoredActions {
+  display: flex;
+  gap: 6px;
+}
+
+.ignoredActions button {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink-muted);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 500;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 10px;
+  transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+
+.ignoredActions button:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+@media (max-width: 760px) {
+  .settingsLayout {
+    grid-template-columns: 1fr;
+  }
+  .settingsSidebar {
+    position: static;
+  }
+  .ignoredItem {
+    grid-template-columns: 1fr;
+  }
+}
+
 .spin {
   animation: spin 0.8s linear infinite;
 }
@@ -1824,9 +2418,6 @@ input:focus {
    ========================================================= */
 
 @media (max-width: 980px) {
-  .lp-nav-center {
-    display: none;
-  }
   .lp-steps,
   .lp-features,
   .lp-pricing-grid {

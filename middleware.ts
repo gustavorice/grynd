@@ -16,7 +16,7 @@ const isProtectedApiRoute = createRouteMatcher([
   "/api/leads(.*)",
   "/api/profile(.*)",
   "/api/send-whatsapp(.*)",
-  "/api/stripe/(checkout|portal|addon)(.*)"
+  "/api/stripe/(checkout|portal|addon|sync)(.*)"
 ]);
 
 export default clerkMiddleware(async (auth, req) => {

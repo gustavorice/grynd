@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+
+// Vercel Pro permite até 300s; Hobby até 10s. Pro precisa pelo menos 60 pro scraping.
+export const maxDuration = 60;
+export const runtime = "nodejs";
 import { AuthError, getOrSyncUser } from "@/lib/auth";
 import { db } from "@/lib/db/client";
 import { searchHistory } from "@/lib/db/schema";

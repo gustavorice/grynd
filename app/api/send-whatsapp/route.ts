@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+
+// Pode invocar scraping de fallback pra hidratar contato — mesmo timeout da busca.
+export const maxDuration = 60;
+export const runtime = "nodejs";
 import { AuthError, getOrSyncUser } from "@/lib/auth";
 import { normalizeBrazilPhone } from "@/lib/phone";
 import { PLANS, type PlanId } from "@/lib/plans";

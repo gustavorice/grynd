@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: "standalone",
+  // 'standalone' só pra Docker (Fly.io). Vercel infere o melhor output sozinho.
+  ...(process.env.DOCKER_BUILD === "true" ? { output: "standalone" as const } : {}),
   devIndicators: false,
   experimental: {
     serverActions: {
@@ -11,6 +12,7 @@ const nextConfig: NextConfig = {
   // Pacotes server-only que não precisam ir pro client bundle.
   serverExternalPackages: [
     "playwright-core",
+    "@sparticuz/chromium",
     "@neondatabase/serverless",
     "drizzle-orm",
     "stripe"

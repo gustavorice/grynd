@@ -1,6 +1,6 @@
-import { existsSync } from "node:fs";
 import { diagnoseLead } from "@/lib/diagnose";
 import { extractBrazilPhone, normalizeBrazilPhone } from "@/lib/phone";
+import { launchBrowser } from "@/lib/providers/browser";
 import type { Lead } from "@/lib/types";
 
 type ScrapedPlace = {
@@ -15,12 +15,6 @@ type ScrapedPlace = {
 
 type ScrapedContact = Pick<ScrapedPlace, "phone" | "website" | "instagram" | "facebook">;
 
-const BROWSER_PATHS = [
-  "C:/Program Files/Google/Chrome/Application/chrome.exe",
-  "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe",
-  "C:/Program Files/Microsoft/Edge/Application/msedge.exe",
-  "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe"
-];
 const SCRAPE_CONCURRENCY = 4;
 const SCROLL_STEPS = 3;
 const CONTACT_HYDRATION_LIMIT = 10;
@@ -31,17 +25,7 @@ export async function searchGoogleMapsScrape(params: {
   location: string;
   limit: number;
 }) {
-  const executablePath = BROWSER_PATHS.find((item) => existsSync(item));
-  if (!executablePath) {
-    throw new Error("Chrome ou Edge nao encontrado para scraping temporario.");
-  }
-
-  const { chromium } = await import("playwright-core");
-  const browser = await chromium.launch({
-    executablePath,
-    headless: true,
-    args: ["--disable-blink-features=AutomationControlled", "--no-sandbox"]
-  });
+  const browser = await launchBrowser();
 
   try {
     const page = await browser.newPage({
@@ -76,15 +60,12 @@ export async function searchGoogleMapsScrape(params: {
 }
 
 export async function scrapeGoogleMapsContact(url: string): Promise<ScrapedContact> {
-  const executablePath = BROWSER_PATHS.find((item) => existsSync(item));
-  if (!executablePath) return {};
-
-  const { chromium } = await import("playwright-core");
-  const browser = await chromium.launch({
-    executablePath,
-    headless: true,
-    args: ["--disable-blink-features=AutomationControlled", "--no-sandbox"]
-  });
+  let browser: Awaited<ReturnType<typeof launchBrowser>>;
+  try {
+    browser = await launchBrowser();
+  } catch {
+    return {};
+  }
 
   try {
     return await scrapeContactWithBrowser(browser, url);

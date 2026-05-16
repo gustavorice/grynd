@@ -186,7 +186,54 @@ export const NICHE_CATALOG: Record<string, string[]> = {
   alfaiate: ["alfaiate", "costureira", "ajustes de roupas", "costura"],
   floricultura: ["floricultura", "flores", "buques", "arranjos florais"],
   costureira: ["costureira", "ajustes", "alfaiate"],
-  sapataria: ["sapataria", "conserto de sapatos", "sapateiro"]
+  sapataria: ["sapataria", "conserto de sapatos", "sapateiro"],
+
+  // ========= TECNOLOGIA / VAREJO DE NICHO =========
+  softwarehouse: [
+    "software house",
+    "desenvolvedora de software",
+    "empresa de software",
+    "agencia de desenvolvimento",
+    "fabrica de software"
+  ],
+  agenciadigital: ["agencia digital", "agencia de marketing", "agencia web", "agencia"],
+  lojadecelular: [
+    "loja de celular",
+    "loja de celulares",
+    "celular",
+    "smartphones",
+    "assistencia de celular"
+  ],
+  lojadedrones: ["loja de drones", "drones", "drone shop"],
+  lojadesementes: ["loja de sementes", "sementes", "agricola", "produtos agricolas"],
+  lojadebicicleta: ["loja de bicicletas", "bicicleta", "ciclismo", "bike shop"],
+  lojadeinformatica: [
+    "loja de informatica",
+    "informatica",
+    "loja de computadores",
+    "assistencia tecnica de informatica"
+  ],
+  lojadegames: ["loja de games", "games", "videogame", "loja de jogos"],
+  lojadebrinquedos: ["loja de brinquedos", "brinquedos", "kids", "loja infantil"],
+  lojadepresentes: ["loja de presentes", "presentes", "gift shop"],
+  lojademusica: ["loja de musica", "instrumentos musicais", "musical"],
+  livraria: ["livraria", "loja de livros", "sebo", "livros"],
+  papelaria: ["papelaria", "loja de papelaria", "material escolar"],
+  tabacaria: ["tabacaria", "cigarros", "narguile", "vape shop"],
+  adega: ["adega", "loja de vinhos", "vinhos", "destilaria"],
+  emporiogourmet: ["emporio", "emporio gourmet", "delicatessen", "produtos importados"],
+
+  // ========= INDÚSTRIA / B2B =========
+  industria: ["industria", "fabrica", "fabricante", "industrial"],
+  distribuidora: ["distribuidora", "atacadista", "atacado", "distribuicao"],
+  importadora: ["importadora", "comercio exterior", "trading"],
+  transportadora: ["transportadora", "logistica", "fretes", "mudancas"],
+
+  // ========= EVENTOS / FESTAS =========
+  bufetinfantil: ["buffet infantil", "festas infantis", "casa de festa infantil"],
+  decoracaodefestas: ["decoracao de festas", "festas", "eventos", "organizacao de eventos"],
+  fotografodecasamento: ["fotografo de casamento", "fotografia de casamento", "casamento"],
+  djdeeventos: ["dj", "dj para festas", "som e iluminacao", "produtora de eventos"]
 };
 
 /**
@@ -217,19 +264,35 @@ export function normalizeNicheKey(value: string): string {
 
 /**
  * Lista de termos pra buscar de um nicho (catálogo + fallback).
+ *
+ * Pra nichos catalogados → retorna aliases curados.
+ * Pra nichos NÃO catalogados → gera variações genéricas com radicais e
+ * remoção de "loja de", "estudio de", etc. Sempre inclui o termo do usuário.
  */
 export function getNicheTerms(niche: string): string[] {
-  const key = normalizeNicheKey(niche);
+  const raw = niche.trim();
+  const key = normalizeNicheKey(raw);
   const singularKey = key.endsWith("s") ? key.slice(0, -1) : key;
 
   const fromCatalog = NICHE_CATALOG[key] ?? NICHE_CATALOG[singularKey] ?? [];
 
-  // Sempre inclui o termo original do usuário também — capturar grafias
-  // exatas que ele/ela digitou.
-  const explicit = [niche.trim(), niche.trim().endsWith("s") ? niche.trim().slice(0, -1) : null]
-    .filter(Boolean) as string[];
+  // Termo original + variação singular/plural
+  const explicit = [raw, raw.endsWith("s") ? raw.slice(0, -1) : `${raw}s`].filter(Boolean);
 
-  return Array.from(new Set([...explicit, ...fromCatalog]));
+  // Pra nicho não catalogado: gera derivações automáticas
+  let auto: string[] = [];
+  if (fromCatalog.length === 0) {
+    // Remove prefixos comuns ("loja de", "casa de", "estudio de")
+    const stripped = raw.replace(/^(loja\s+de\s+|casa\s+de\s+|estudio\s+de\s+|centro\s+de\s+|clinica\s+de\s+|escola\s+de\s+)/i, "");
+    auto = [
+      stripped,
+      stripped.endsWith("s") ? stripped.slice(0, -1) : `${stripped}s`,
+      `loja de ${stripped}`,
+      `${stripped} loja`
+    ].filter((v) => v && v !== raw);
+  }
+
+  return Array.from(new Set([...explicit, ...fromCatalog, ...auto]));
 }
 
 /**
@@ -238,11 +301,22 @@ export function getNicheTerms(niche: string): string[] {
  */
 export function getNicheMatchTerms(niche: string): string[] {
   const terms = getNicheTerms(niche).map((t) => t.toLowerCase());
-  // Adiciona o radical (primeiros 5-7 chars) pra capturar variações:
+  // Adiciona o radical (primeiros 5-7 chars) pra capturar variações de grafia:
   // "hamburgueria" → "hamburg" cobre "hamburger", "hamburguer", etc.
   const roots = terms
     .map((t) => t.replace(/[^a-z]+/g, ""))
     .filter((t) => t.length >= 5)
     .map((t) => t.slice(0, Math.min(7, t.length)));
   return Array.from(new Set([...terms, ...roots]));
+}
+
+/**
+ * Indica se o nicho está catalogado (tem aliases curados).
+ * Quando NÃO está, o filtro de match deve ser mais permissivo — confiamos
+ * que o Google Maps já filtrou bem por nós.
+ */
+export function isNicheCatalogued(niche: string): boolean {
+  const key = normalizeNicheKey(niche);
+  const singularKey = key.endsWith("s") ? key.slice(0, -1) : key;
+  return Boolean(NICHE_CATALOG[key] ?? NICHE_CATALOG[singularKey]);
 }

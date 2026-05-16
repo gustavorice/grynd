@@ -18,6 +18,7 @@ import type { Lead, LeadSource, SearchResponse } from "@/lib/types";
 const SearchSchema = z.object({
   niche: z.string().min(2),
   location: z.string().min(2),
+  extraLocations: z.array(z.string().min(2)).max(5).optional(),
   limit: z.coerce.number().min(1).max(180).default(120),
   enrich: z.boolean().default(true),
   refresh: z.boolean().default(false),
@@ -69,16 +70,33 @@ export async function POST(request: Request) {
       );
     }
 
-    const [placesResult, osmResult, scrapeResult] = await Promise.allSettled([
-      searchGooglePlaces(params),
-      searchOpenStreetMap({ ...params, enrich: false }),
-      params.mode === "deep" ? searchGoogleMapsScrape(params) : Promise.resolve([] as Lead[])
-    ]);
+    // Lista de localizações: a principal + extras (se Pro+ pediu expansão).
+    const locations = [params.location, ...(params.extraLocations ?? [])];
+    const perLocationLimit = Math.ceil(params.limit / locations.length);
 
-    const googleLeads = placesResult.status === "fulfilled" ? placesResult.value : null;
-    const osmLeads = osmResult.status === "fulfilled" ? osmResult.value : [];
-    const scrapedLeads = scrapeResult.status === "fulfilled" ? scrapeResult.value : [];
-    let leads = mergeSources([googleLeads ?? [], scrapedLeads, osmLeads], params.limit);
+    // Pra cada localização, dispara as 3 buscas em paralelo. Em modo deep
+    // com várias localizações, isso pode escalar — limitamos extraLocations a 5.
+    type PerLocationResult = { places: Lead[]; osm: Lead[]; scrape: Lead[] };
+    const allResults: PerLocationResult[] = await Promise.all(
+      locations.map(async (loc): Promise<PerLocationResult> => {
+        const locParams = { ...params, location: loc, limit: perLocationLimit };
+        const [places, osm, scrape] = await Promise.allSettled([
+          searchGooglePlaces(locParams),
+          searchOpenStreetMap({ ...locParams, enrich: false }),
+          params.mode === "deep" ? searchGoogleMapsScrape(locParams) : Promise.resolve([] as Lead[])
+        ]);
+        return {
+          places: places.status === "fulfilled" ? (places.value ?? []) : [],
+          osm: osm.status === "fulfilled" ? osm.value : [],
+          scrape: scrape.status === "fulfilled" ? scrape.value : []
+        };
+      })
+    );
+
+    const googleLeads: Lead[] = allResults.flatMap((r) => r.places);
+    const osmLeads: Lead[] = allResults.flatMap((r) => r.osm);
+    const scrapedLeads: Lead[] = allResults.flatMap((r) => r.scrape);
+    let leads = mergeSources([googleLeads, scrapedLeads, osmLeads], params.limit);
 
     if (!leads.length) {
       throw new Error("Nao encontrei leads nesse nicho/local com as fontes disponiveis.");

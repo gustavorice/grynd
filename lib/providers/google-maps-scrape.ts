@@ -1,5 +1,5 @@
 import { diagnoseLead } from "@/lib/diagnose";
-import { getNicheMatchTerms, getNicheTerms } from "@/lib/niches";
+import { getNicheMatchTerms, getNicheTerms, isNicheCatalogued } from "@/lib/niches";
 import { extractBrazilPhone, normalizeBrazilPhone } from "@/lib/phone";
 import { launchBrowser } from "@/lib/providers/browser";
 import type { Lead } from "@/lib/types";
@@ -276,7 +276,6 @@ function matchesScrapedNiche(place: ScrapedPlace, niche: string) {
   const parsed = parseGoogleCardText(place.cardText, place.name);
   const haystack = normalize(`${place.name} ${parsed.category ?? ""}`);
 
-  const matchTerms = getNicheMatchTerms(niche).map(normalize).filter(Boolean);
   const normalizedNiche = normalize(niche).replace(/\s+/g, "");
   const singularNiche = normalizedNiche.endsWith("s")
     ? normalizedNiche.slice(0, -1)
@@ -287,9 +286,14 @@ function matchesScrapedNiche(place: ScrapedPlace, niche: string) {
     ...(NICHE_EXCLUSIONS[singularNiche] ?? [])
   ].map(normalize);
 
-  const matches = matchTerms.some((term) => haystack.includes(term));
-  const isExcluded = excluded.some((term) => term && haystack.includes(term));
-  return matches && !isExcluded;
+  if (excluded.some((term) => term && haystack.includes(term))) return false;
+
+  // Pra nichos NÃO catalogados, confiar no Google Maps: ele já filtra bem
+  // pelo query. Recusar leads aqui só remove resultados válidos.
+  if (!isNicheCatalogued(niche)) return true;
+
+  const matchTerms = getNicheMatchTerms(niche).map(normalize).filter(Boolean);
+  return matchTerms.some((term) => haystack.includes(term));
 }
 
 function toLead(place: ScrapedPlace, params: { niche: string; location: string }) {

@@ -28,6 +28,7 @@ import {
   UserRound
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { SupportWidget } from "@/app/_components/SupportWidget";
 import type { Plan, PlanId } from "@/lib/plans";
 import type { CompanyProfile } from "@/lib/profile";
 import type { QuotaSnapshot } from "@/lib/quota";
@@ -76,6 +77,22 @@ export default function Home() {
   const [insights, setInsights] = useState<Record<string, string>>({});
   const [profile, setProfile] = useState<CompanyProfile>(DEFAULT_PROFILE);
   const [me, setMe] = useState<Me | null>(null);
+  const [showExpand, setShowExpand] = useState(false);
+  const [extraLocationsInput, setExtraLocationsInput] = useState("");
+
+  function runExpandedSearch() {
+    const cities = extraLocationsInput
+      .split(",")
+      .map((c) => c.trim())
+      .filter(Boolean)
+      .slice(0, 5);
+    if (cities.length === 0) {
+      setNotice("Adicione pelo menos uma cidade pra expandir a busca.");
+      return;
+    }
+    setShowExpand(false);
+    void searchLeads("deep", true, cities);
+  }
 
   useEffect(() => {
     void loadSavedLeads();
@@ -227,15 +244,33 @@ export default function Home() {
     }
   }
 
-  async function searchLeads(mode: "fast" | "deep" = "fast", refresh = false) {
+  async function searchLeads(
+    mode: "fast" | "deep" = "fast",
+    refresh = false,
+    extraLocations?: string[]
+  ) {
     setLoading(true);
     setView("search");
-    setNotice(mode === "deep" ? "Busca profunda em andamento..." : "Buscando leads...");
+    setNotice(
+      extraLocations && extraLocations.length > 0
+        ? `Expandindo busca pra ${extraLocations.length + 1} cidades...`
+        : mode === "deep"
+          ? "Busca profunda em andamento..."
+          : "Buscando leads..."
+    );
     try {
       const response = await fetch("/api/search", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ location, niche, limit: MAX_LEADS, enrich: false, refresh, mode })
+        body: JSON.stringify({
+          location,
+          niche,
+          limit: MAX_LEADS,
+          enrich: false,
+          refresh,
+          mode,
+          extraLocations
+        })
       });
       const data = (await response.json()) as SearchResponse & { error?: string };
       if (response.status === 402) {
@@ -446,6 +481,55 @@ export default function Home() {
                 +200 leads por R$ 20
               </button>
             )}
+            {me && me.plan.id !== "free" && (
+              <div className="expandWrap">
+                {!showExpand ? (
+                  <button
+                    className="ghostButton"
+                    onClick={() => setShowExpand(true)}
+                    type="button"
+                    title="Adicione cidades pra expandir a busca"
+                  >
+                    <MapPin size={14} />
+                    Expandir pra regiões próximas?
+                  </button>
+                ) : (
+                  <div className="expandBox">
+                    <label>
+                      Cidades próximas (separadas por vírgula)
+                      <input
+                        autoFocus
+                        placeholder="Ex: Limeira, Araras, Cordeirópolis"
+                        value={extraLocationsInput}
+                        onChange={(e) => setExtraLocationsInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") runExpandedSearch();
+                          if (e.key === "Escape") setShowExpand(false);
+                        }}
+                      />
+                    </label>
+                    <div className="expandActions">
+                      <button
+                        className="primaryButton"
+                        onClick={runExpandedSearch}
+                        disabled={loading}
+                        type="button"
+                      >
+                        <Search size={14} />
+                        Buscar
+                      </button>
+                      <button
+                        className="ghostButton"
+                        onClick={() => setShowExpand(false)}
+                        type="button"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
             {me?.plan.id === "free" && (
               <button className="upgradeButton" onClick={() => void startCheckout("pro")} type="button">
                 <Crown size={14} />
@@ -546,6 +630,8 @@ export default function Home() {
           />
         </section>
       )}
+
+      <SupportWidget />
     </main>
   );
 }

@@ -174,6 +174,17 @@ export async function POST(request: Request) {
     if (error instanceof QuotaError) {
       return NextResponse.json({ error: error.message, plan: error.plan }, { status: error.status });
     }
+    if (error instanceof z.ZodError) {
+      // Não joga o JSON cru do Zod pro usuário — manda mensagem amigável
+      const issue = error.errors[0];
+      const field = issue?.path?.[0];
+      const fieldLabel =
+        field === "niche" ? "Nicho" : field === "location" ? "Local" : String(field ?? "campo");
+      return NextResponse.json(
+        { error: `${fieldLabel} precisa ter pelo menos 2 caracteres.` },
+        { status: 400 }
+      );
+    }
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Erro inesperado ao buscar leads." },
       { status: 400 }

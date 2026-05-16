@@ -268,8 +268,19 @@ export default function Home() {
   async function searchLeads(
     mode: "fast" | "deep" = "fast",
     refresh = false,
-    extraLocations?: string[]
+    extraLocations?: string[],
+    override?: { location?: string; niche?: string }
   ) {
+    // Permite passar location/niche direto (evita race condition quando o
+    // chip dispara setState + searchLeads no mesmo tick).
+    const effectiveLocation = (override?.location ?? location).trim();
+    const effectiveNiche = (override?.niche ?? niche).trim();
+
+    if (effectiveLocation.length < 2 || effectiveNiche.length < 2) {
+      setNotice("Preencha a cidade e o nicho (mínimo 2 letras cada) pra buscar.");
+      return;
+    }
+
     setLoading(true);
     setView("search");
     setNotice(
@@ -284,8 +295,8 @@ export default function Home() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          location,
-          niche,
+          location: effectiveLocation,
+          niche: effectiveNiche,
           limit: MAX_LEADS,
           enrich: false,
           refresh,
@@ -751,8 +762,11 @@ export default function Home() {
                           className="emptyState-chip"
                           onClick={() => {
                             setNiche(suggestion);
-                            if (canSearch || location.trim().length >= 2) {
-                              void searchLeads("fast", false);
+                            if (location.trim().length >= 2) {
+                              // Passa o nicho direto — evita race do setState.
+                              void searchLeads("fast", false, undefined, {
+                                niche: suggestion
+                              });
                             }
                           }}
                           disabled={location.trim().length < 2}

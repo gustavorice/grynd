@@ -18,7 +18,9 @@ type OverpassElement = {
 };
 
 const CATEGORY_KEYS = ["amenity", "shop", "office", "craft", "tourism", "leisure", "healthcare", "sport"];
-const FALLBACK_LIMIT = 220;
+const FALLBACK_LIMIT = 800;
+// Expande o bbox em 25% pra cada lado, capturando bairros vizinhos / cidades-satélite.
+const BBOX_EXPAND_RATIO = 0.25;
 
 const NICHE_ALIASES: Record<string, string[]> = {
   academia: [
@@ -62,10 +64,10 @@ export async function searchOpenStreetMap(params: {
     method: "POST",
     headers: {
       "content-type": "application/x-www-form-urlencoded",
-      "user-agent": "LeadHubLocal/0.1 (+local research tool)"
+      "user-agent": "Grynd/1.0 (+grynd.com.br)"
     },
     body: new URLSearchParams({ data: query }),
-    signal: AbortSignal.timeout(25000)
+    signal: AbortSignal.timeout(40000)
   });
 
   if (!response.ok) {
@@ -160,7 +162,7 @@ async function geocodeLocation(location: string) {
   url.searchParams.set("q", location);
 
   const response = await fetch(url, {
-    headers: { "user-agent": "LeadHubLocal/0.1 (+local research tool)" },
+    headers: { "user-agent": "Grynd/1.0 (+grynd.com.br)" },
     signal: AbortSignal.timeout(10000)
   });
   if (!response.ok) throw new Error("Nao consegui localizar essa cidade/regiao.");
@@ -170,7 +172,16 @@ async function geocodeLocation(location: string) {
   if (!bbox) throw new Error("Localizacao sem caixa geografica.");
 
   const [south, north, west, east] = bbox.map(Number);
-  return { south, north, west, east };
+
+  // Expande bbox em ~25% pra cada lado pra pegar bairros vizinhos / arredores.
+  const latSpan = (north - south) * BBOX_EXPAND_RATIO;
+  const lonSpan = (east - west) * BBOX_EXPAND_RATIO;
+  return {
+    south: south - latSpan,
+    north: north + latSpan,
+    west: west - lonSpan,
+    east: east + lonSpan
+  };
 }
 
 function buildOverpassQuery(
@@ -180,9 +191,11 @@ function buildOverpassQuery(
 ) {
   const box = `${bbox.south},${bbox.west},${bbox.north},${bbox.east}`;
   const filters = overpassFiltersForNiche(niche, box);
-  const outputLimit = Math.min(Math.max(limit * 8, 80), FALLBACK_LIMIT);
+  // Queremos muito mais elementos brutos do que o limite final do user — filtros
+  // de matchesNiche + dedupe vão reduzir. Mínimo 200, máximo 800.
+  const outputLimit = Math.min(Math.max(limit * 12, 200), FALLBACK_LIMIT);
   return `
-    [out:json][timeout:25];
+    [out:json][timeout:30];
     (
       ${filters}
     );

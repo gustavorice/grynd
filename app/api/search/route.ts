@@ -10,6 +10,7 @@ import { searchHistory } from "@/lib/db/schema";
 import { searchGooglePlaces } from "@/lib/providers/google";
 import { searchGoogleMapsScrape } from "@/lib/providers/google-maps-scrape";
 import { searchOpenStreetMap } from "@/lib/providers/osm";
+import { searchSerpApi } from "@/lib/providers/serpapi";
 import { QuotaError, consumeSearch, getOrCreateQuota } from "@/lib/quota";
 import { checkRate, searchRateLimit } from "@/lib/rate-limit";
 import { cacheKey, readCache, writeCache } from "@/lib/search-cache";
@@ -74,21 +75,23 @@ export async function POST(request: Request) {
     const locations = [params.location, ...(params.extraLocations ?? [])];
     const perLocationLimit = Math.ceil(params.limit / locations.length);
 
-    // Pra cada localização, dispara as 3 buscas em paralelo. Em modo deep
-    // com várias localizações, isso pode escalar — limitamos extraLocations a 5.
+    // Pra cada localização, dispara 4 providers em paralelo. SerpAPI só roda
+    // se SERPAPI_KEY estiver configurado (returns null senão).
     type PerLocationResult = {
       places: Lead[];
       osm: Lead[];
       scrape: Lead[];
+      serp: Lead[];
       errors: string[];
     };
     const allResults: PerLocationResult[] = await Promise.all(
       locations.map(async (loc): Promise<PerLocationResult> => {
         const locParams = { ...params, location: loc, limit: perLocationLimit };
-        const [places, osm, scrape] = await Promise.allSettled([
+        const [places, osm, scrape, serp] = await Promise.allSettled([
           searchGooglePlaces(locParams),
           searchOpenStreetMap({ ...locParams, enrich: false }),
-          params.mode === "deep" ? searchGoogleMapsScrape(locParams) : Promise.resolve([] as Lead[])
+          params.mode === "deep" ? searchGoogleMapsScrape(locParams) : Promise.resolve([] as Lead[]),
+          searchSerpApi(locParams)
         ]);
         const errors: string[] = [];
         if (places.status === "rejected") {
@@ -106,10 +109,16 @@ export async function POST(request: Request) {
           errors.push(`scrape(${loc}): ${msg}`);
           console.error("[search] scrape falhou pra", loc, scrape.reason);
         }
+        if (serp.status === "rejected") {
+          const msg = serp.reason instanceof Error ? serp.reason.message : String(serp.reason);
+          errors.push(`serp(${loc}): ${msg}`);
+          console.error("[search] serpapi falhou pra", loc, serp.reason);
+        }
         return {
           places: places.status === "fulfilled" ? (places.value ?? []) : [],
           osm: osm.status === "fulfilled" ? osm.value : [],
           scrape: scrape.status === "fulfilled" ? scrape.value : [],
+          serp: serp.status === "fulfilled" ? (serp.value ?? []) : [],
           errors
         };
       })
@@ -117,7 +126,7 @@ export async function POST(request: Request) {
 
     const googleLeads: Lead[] = allResults.flatMap((r) => r.places);
     const osmLeads: Lead[] = allResults.flatMap((r) => r.osm);
-    const scrapedLeads: Lead[] = allResults.flatMap((r) => r.scrape);
+    const scrapedLeads: Lead[] = allResults.flatMap((r) => [...r.scrape, ...r.serp]);
     const sourceErrors = allResults.flatMap((r) => r.errors);
     let leads = mergeSources([googleLeads, scrapedLeads, osmLeads], params.limit);
 

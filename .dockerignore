@@ -1,0 +1,16 @@
+node_modules
+.next
+.git
+.env*
+*.log
+data/leads.json
+data/profile.json
+drizzle
+fly.toml
+Dockerfile
+.dockerignore
+README.md
+DEPLOY.md
+.vscode
+.idea
+coverage

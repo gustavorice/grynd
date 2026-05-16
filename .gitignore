@@ -1,0 +1,14 @@
+.next
+node_modules
+.env
+.env.local
+.env.*.local
+data/leads.json
+data/profile.json
+npm-debug.log*
+
+# clerk configuration (can include secrets)
+/.clerk/
+
+# drizzle migrations metadata
+drizzle/meta/_journal.json.bak

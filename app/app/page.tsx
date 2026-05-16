@@ -425,23 +425,37 @@ export default function Home() {
   return (
     <main className="appShell">
       <header className="appHeader">
-        <button className="brandText" type="button" onClick={() => setView("search")} aria-label="Grynd">
-          <img className="brandLogo" src="/grynd-logo.png" alt="Grynd" />
-        </button>
-        <nav className="navTabs">
-          <NavButton active={view === "search"} icon={<Search size={16} />} label="Busca" onClick={() => setView("search")} />
-          <button
-            type="button"
-            className={`navIconBtn${view === "settings" ? " activeNav" : ""}`}
-            onClick={() => setView("settings")}
-            aria-label="Configurações"
-            title="Configurações"
-          >
-            <Settings2 size={17} />
+        <div className="appHeader-left">
+          <button className="brandText" type="button" onClick={() => setView("search")} aria-label="Grynd">
+            <img
+              className="brandLogo"
+              src="/grynd-logo.png"
+              alt="Grynd"
+              width={140}
+              height={32}
+            />
           </button>
-        </nav>
+          <nav className="navTabs" aria-label="Navegação">
+            <NavButton
+              active={view === "search"}
+              icon={<Search size={16} />}
+              label="Busca"
+              onClick={() => setView("search")}
+            />
+            <button
+              type="button"
+              className={`navIconBtn${view === "settings" ? " activeNav" : ""}`}
+              onClick={() => setView("settings")}
+              aria-label="Configurações"
+              title="Configurações"
+            >
+              <Settings2 size={17} />
+            </button>
+          </nav>
+        </div>
+
         <div className="userArea">
-          {me && (
+          {me ? (
             <button
               className={`planBadge plan-${me.plan.id}`}
               onClick={() => (me.plan.id === "free" ? startCheckout("pro") : openBillingPortal())}
@@ -478,8 +492,20 @@ export default function Home() {
                 </span>
               </span>
             </button>
+          ) : (
+            <span className="planBadge planBadge-skeleton" aria-hidden>
+              <span className="planBadge-inner">
+                <span className="planBadge-name skel-block">&nbsp;&nbsp;&nbsp;&nbsp;</span>
+              </span>
+              <span className="planBadge-quota">
+                <span className="planBadge-track" />
+                <span className="planBadge-numbers skel-block">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>
+              </span>
+            </span>
           )}
-          <UserButton afterSignOutUrl="/sign-in" signInUrl="/sign-in" />
+          <div className="userArea-avatar">
+            <UserButton afterSignOutUrl="/sign-in" signInUrl="/sign-in" />
+          </div>
           <SignOutButton redirectUrl="/sign-in">
             <button className="signOutButton" type="button" title="Sair">
               <LogOut size={15} />

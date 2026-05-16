@@ -74,8 +74,8 @@ const DEFAULT_PROFILE: CompanyProfile = {
 };
 
 export default function Home() {
-  const [location, setLocation] = useState("Rio Claro, Sao Paulo, Brazil");
-  const [niche, setNiche] = useState("sorveteria");
+  const [location, setLocation] = useState("");
+  const [niche, setNiche] = useState("");
   const [searchResults, setSearchResults] = useState<Lead[]>([]);
   const [savedLeads, setSavedLeads] = useState<Lead[]>([]);
   const [selected, setSelected] = useState<Lead | null>(null);
@@ -84,12 +84,14 @@ export default function Home() {
   const [dataFilter, setDataFilter] = useState<DataFilter>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [loading, setLoading] = useState(false);
-  const [notice, setNotice] = useState("Digite um nicho e busque o maximo de leads disponivel.");
+  const [notice, setNotice] = useState("Digite a cidade e o nicho pra começar.");
   const [insights, setInsights] = useState<Record<string, string>>({});
   const [profile, setProfile] = useState<CompanyProfile>(DEFAULT_PROFILE);
   const [me, setMe] = useState<Me | null>(null);
   const [showExpand, setShowExpand] = useState(false);
   const [extraLocationsInput, setExtraLocationsInput] = useState("");
+
+  const canSearch = location.trim().length >= 2 && niche.trim().length >= 2;
 
   function runExpandedSearch() {
     const cities = extraLocationsInput
@@ -517,7 +519,7 @@ export default function Home() {
             <div className="searchActions">
               <button
                 className="primaryButton btn-primary"
-                disabled={loading}
+                disabled={loading || !canSearch}
                 onClick={() => void searchLeads("fast", false)}
                 type="button"
               >
@@ -527,7 +529,7 @@ export default function Home() {
               <div className="secondaryActions">
                 <button
                   className="btn-outline"
-                  disabled={loading}
+                  disabled={loading || !canSearch}
                   onClick={() => void searchLeads("deep", false)}
                   type="button"
                   title="Varredura mais ampla (mais lento, mais leads)"
@@ -537,7 +539,7 @@ export default function Home() {
                 </button>
                 <button
                   className="btn-ghost"
-                  disabled={loading}
+                  disabled={loading || !canSearch}
                   onClick={() => void searchLeads("fast", true)}
                   type="button"
                   title="Ignora cache e refaz"
@@ -696,7 +698,7 @@ export default function Home() {
                   <strong>{searchResults.length === 0 ? "Faça sua primeira busca" : "Nenhum lead com esses filtros"}</strong>
                   <span>
                     {searchResults.length === 0
-                      ? "Digite um nicho à esquerda ou tente um destes:"
+                      ? "Digite a cidade e o nicho à esquerda. Pra inspirar, tente um destes:"
                       : "Tente ajustar os filtros acima ou buscar outro nicho."}
                   </span>
                   {searchResults.length === 0 && (
@@ -708,8 +710,14 @@ export default function Home() {
                           className="emptyState-chip"
                           onClick={() => {
                             setNiche(suggestion);
-                            void searchLeads("fast", false);
+                            if (canSearch || location.trim().length >= 2) {
+                              void searchLeads("fast", false);
+                            }
                           }}
+                          disabled={location.trim().length < 2}
+                          title={
+                            location.trim().length < 2 ? "Digite a cidade primeiro" : undefined
+                          }
                         >
                           {suggestion}
                         </button>

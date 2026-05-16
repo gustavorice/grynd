@@ -1742,20 +1742,33 @@ p {
   border: 0;
   border-radius: 8px;
   color: var(--ink-muted);
+  cursor: pointer;
   display: inline-flex;
+  font-size: 13.5px;
+  font-weight: 500;
   gap: 8px;
+  letter-spacing: -0.01em;
   min-height: 36px;
-  padding: 0 12px;
-  transition: background 160ms ease, color 160ms ease;
+  padding: 0 14px;
+  transition: background 200ms ease, color 200ms ease;
 }
 
 .navTabs button:hover {
+  background: rgba(255, 255, 255, 0.04);
   color: var(--ink);
 }
 
 .navTabs .activeNav {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.08);
   color: var(--ink);
+}
+
+/* Ícone-only (Configurações) — quadrado, sem padding horizontal extra */
+.navTabs .navIconBtn {
+  justify-content: center;
+  min-width: 36px;
+  padding: 0;
+  width: 36px;
 }
 
 .userArea {

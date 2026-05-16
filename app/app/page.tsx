@@ -40,7 +40,7 @@ type Me = {
   quota: QuotaSnapshot;
 };
 
-type ViewMode = "search" | "saved" | "settings";
+type ViewMode = "search" | "settings";
 type SettingsTab = "profile" | "ignored";
 type SizeFilter = "all" | CompanySize;
 type DataFilter = "all" | "whatsapp" | "social" | "site";
@@ -211,9 +211,17 @@ export default function Home() {
   const savedById = useMemo(() => new Map(savedLeads.map((lead) => [lead.id, lead])), [savedLeads]);
 
   const baseLeads = useMemo(() => {
-    if (view === "saved") return savedLeads.filter((lead) => lead.status !== "ignored");
-    return searchResults.map((lead) => savedById.get(lead.id) ?? lead).filter((lead) => lead.status !== "ignored");
-  }, [savedById, savedLeads, searchResults, view]);
+    // Quando filtro de status é "Salvos", mostra TODOS os leads salvos
+    // (não só os da busca atual), pra que o usuário acesse seu histórico.
+    if (statusFilter === "saved") {
+      return savedLeads.filter((lead) => lead.status === "saved");
+    }
+    // Em qualquer outro filtro, mostra os resultados da última busca
+    // (com merge dos salvos pra refletir status atualizado).
+    return searchResults
+      .map((lead) => savedById.get(lead.id) ?? lead)
+      .filter((lead) => lead.status !== "ignored");
+  }, [savedById, savedLeads, searchResults, statusFilter]);
 
   const ignoredLeads = useMemo(
     () => savedLeads.filter((lead) => lead.status === "ignored"),
@@ -232,14 +240,14 @@ export default function Home() {
   }, [baseLeads, dataFilter, sizeFilter, statusFilter]);
 
   const stats = useMemo(() => {
-    const source = view === "saved" ? savedLeads.filter((lead) => lead.status !== "ignored") : searchResults;
+    const source = searchResults;
     return {
       total: source.length,
-      saved: savedLeads.filter((lead) => lead.status !== "ignored").length,
+      saved: savedLeads.filter((lead) => lead.status === "saved").length,
       whatsapp: source.filter((lead) => lead.whatsapp || lead.phone).length,
       social: source.filter((lead) => lead.instagram || lead.facebook).length
     };
-  }, [savedLeads, searchResults, view]);
+  }, [savedLeads, searchResults]);
 
   async function loadSavedLeads() {
     const response = await fetch("/api/leads");
@@ -422,8 +430,15 @@ export default function Home() {
         </button>
         <nav className="navTabs">
           <NavButton active={view === "search"} icon={<Search size={16} />} label="Busca" onClick={() => setView("search")} />
-          <NavButton active={view === "saved"} icon={<BookmarkCheck size={16} />} label="Leads salvos" onClick={() => setView("saved")} />
-          <NavButton active={view === "settings"} icon={<Settings2 size={16} />} label="Configurações" onClick={() => setView("settings")} />
+          <button
+            type="button"
+            className={`navIconBtn${view === "settings" ? " activeNav" : ""}`}
+            onClick={() => setView("settings")}
+            aria-label="Configurações"
+            title="Configurações"
+          >
+            <Settings2 size={17} />
+          </button>
         </nav>
         <div className="userArea">
           {me && (

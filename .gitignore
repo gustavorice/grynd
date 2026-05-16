@@ -2,6 +2,8 @@
 node_modules
 .env
 .env.local
+.env.production
+.env.vercel
 .env.*.local
 data/leads.json
 data/profile.json

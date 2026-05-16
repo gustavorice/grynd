@@ -248,6 +248,8 @@ export default async function LandingPage() {
             <Link href="/#features">Features</Link>
             <Link href="/pricing">Planos</Link>
             <Link href="/#faq">FAQ</Link>
+            <Link href="/legal/termos">Termos</Link>
+            <Link href="/legal/privacidade">Privacidade</Link>
             <Link href="/sign-in">Entrar</Link>
           </nav>
           <p className="lp-footer-copy">© {new Date().getFullYear()} Grynd</p>

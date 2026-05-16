@@ -1,5 +1,6 @@
 import { diagnoseLead } from "@/lib/diagnose";
 import { enrichFromWebsite } from "@/lib/enrich";
+import { getNicheMatchTerms, getNicheTerms, isNicheCatalogued } from "@/lib/niches";
 import type { Lead } from "@/lib/types";
 
 type NominatimResult = {
@@ -189,72 +190,173 @@ function buildOverpassQuery(
   `;
 }
 
-function overpassFiltersForNiche(niche: string, box: string) {
-  const normalized = normalize(niche);
+/**
+ * Mapeia nicho → tags OSM específicas + regex no nome. Cada entrada é uma
+ * lista de fragmentos de filtro Overpass.
+ *
+ * Quando o nicho não está aqui, caímos no fallback inteligente: regex de
+ * nome usando todos os termos do catálogo central + categorias OSM amplas.
+ */
+function overpassFiltersForNiche(niche: string, box: string): string {
+  const normalized = normalize(niche).replace(/\s+/g, "");
   const singular = normalized.endsWith("s") ? normalized.slice(0, -1) : normalized;
 
   const presets: Record<string, string[]> = {
+    // Comida
     restaurante: [
-      `nwr["amenity"~"^(restaurant|fast_food|cafe|bar|pub|ice_cream)$"]["name"](${box});`,
-      `nwr["shop"~"^(bakery|deli)$"]["name"](${box});`,
-      nameRegexFilter(box, ["restaurante", "lanchonete", "pizzaria", "hamburguer", "burger", "pizza", "cafe"])
+      `nwr["amenity"~"^(restaurant|fast_food|cafe|bar|pub|food_court)$"]["name"](${box});`,
+      `nwr["shop"~"^(bakery|deli|confectionery)$"]["name"](${box});`
     ],
+    hamburgueria: [
+      `nwr["amenity"~"^(fast_food|restaurant)$"]["name"](${box});`,
+      `nwr["cuisine"~"burger|american"]["name"](${box});`
+    ],
+    pizzaria: [
+      `nwr["amenity"~"^(restaurant|fast_food)$"]["name"](${box});`,
+      `nwr["cuisine"~"pizza|italian"]["name"](${box});`
+    ],
+    padaria: [
+      `nwr["shop"="bakery"]["name"](${box});`,
+      `nwr["amenity"~"^(bakery|cafe)$"]["name"](${box});`
+    ],
+    confeitaria: [
+      `nwr["shop"~"^(confectionery|pastry|bakery)$"]["name"](${box});`,
+      `nwr["amenity"="cafe"]["name"](${box});`
+    ],
+    lanchonete: [`nwr["amenity"~"^(fast_food|cafe|restaurant)$"]["name"](${box});`],
+    cafeteria: [`nwr["amenity"="cafe"]["name"](${box});`, `nwr["shop"="coffee"]["name"](${box});`],
+    bar: [`nwr["amenity"~"^(bar|pub|biergarten)$"]["name"](${box});`],
     sorveteria: [
       `nwr["amenity"="ice_cream"]["name"](${box});`,
-      `nwr["shop"~"^(ice_cream|confectionery|pastry)$"]["name"](${box});`,
-      nameRegexFilter(box, ["sorveteria", "sorvete", "gelato", "acai", "açaí", "milk shake"])
+      `nwr["shop"~"^(ice_cream|confectionery)$"]["name"](${box});`
     ],
+    acai: [`nwr["amenity"~"^(ice_cream|cafe|fast_food)$"]["name"](${box});`],
+    sushi: [`nwr["amenity"="restaurant"]["cuisine"~"japanese|sushi"]["name"](${box});`],
+    churrascaria: [`nwr["amenity"="restaurant"]["cuisine"~"brazilian|barbecue"]["name"](${box});`],
+
+    // Saúde
     dentista: [
       `nwr["amenity"="dentist"]["name"](${box});`,
-      `nwr["healthcare"="dentist"]["name"](${box});`,
-      nameRegexFilter(box, ["dentista", "odontologia", "odontologico", "odontológico"])
+      `nwr["healthcare"="dentist"]["name"](${box});`
     ],
-    academia: [
-      `nwr["leisure"="fitness_centre"]["name"](${box});`,
-      `nwr["leisure"="sports_centre"]["name"](${box});`,
-      `nwr["leisure"="fitness_station"]["name"](${box});`,
-      `nwr["amenity"="gym"]["name"](${box});`,
-      `nwr["sport"~"^(fitness|crossfit|yoga|pilates|bodybuilding|martial_arts|gymnastics|boxing)$"]["name"](${box});`,
-      `nwr["amenity"~"^(dancing_school|dojo)$"]["name"](${box});`,
-      nameRegexFilter(box, [
-        "academia",
-        "fitness",
-        "gym",
-        "crossfit",
-        "pilates",
-        "yoga",
-        "funcional",
-        "personal",
-        "treinamento",
-        "musculacao",
-        "musculação",
-        "boxe",
-        "muay thai",
-        "dojo"
-      ])
+    medico: [
+      `nwr["amenity"~"^(doctors|clinic)$"]["name"](${box});`,
+      `nwr["healthcare"~"^(doctor|clinic)$"]["name"](${box});`
     ],
-    advogado: [`nwr["office"="lawyer"]["name"](${box});`, nameRegexFilter(box, ["advogado", "advocacia", "juridico", "jurídico"])],
-    farmacia: [
-      `nwr["amenity"="pharmacy"]["name"](${box});`,
-      `nwr["healthcare"="pharmacy"]["name"](${box});`,
-      nameRegexFilter(box, ["farmacia", "farmácia", "drogaria"])
-    ],
-    mercado: [`nwr["shop"~"^(supermarket|convenience|grocery)$"]["name"](${box});`, nameRegexFilter(box, ["mercado", "supermercado", "mercearia"])],
     clinica: [
       `nwr["amenity"~"^(clinic|doctors)$"]["name"](${box});`,
-      `nwr["healthcare"~"^(clinic|doctor)$"]["name"](${box});`,
-      nameRegexFilter(box, ["clinica", "clínica", "medico", "médico"])
+      `nwr["healthcare"~"^(clinic|doctor)$"]["name"](${box});`
     ],
+    farmacia: [
+      `nwr["amenity"="pharmacy"]["name"](${box});`,
+      `nwr["healthcare"="pharmacy"]["name"](${box});`
+    ],
+    veterinario: [`nwr["amenity"="veterinary"]["name"](${box});`],
+
+    // Beleza
+    barbearia: [
+      `nwr["shop"~"^(hairdresser|beauty)$"]["name"](${box});`,
+      `nwr["craft"~"^(barber)$"]["name"](${box});`
+    ],
+    cabeleireiro: [`nwr["shop"~"^(hairdresser|beauty)$"]["name"](${box});`],
+    estetica: [`nwr["shop"~"^(beauty|cosmetics)$"]["name"](${box});`, `nwr["amenity"="spa"]["name"](${box});`],
+    spa: [`nwr["amenity"="spa"]["name"](${box});`],
+    manicure: [`nwr["shop"~"^(beauty|nail)$"]["name"](${box});`],
+    tatuagem: [`nwr["shop"="tattoo"]["name"](${box});`, `nwr["amenity"="tattoo"]["name"](${box});`],
+    otica: [`nwr["shop"~"^(optician)$"]["name"](${box});`],
+
+    // Moda / varejo
+    lojaderoupas: [`nwr["shop"~"^(clothes|fashion|boutique)$"]["name"](${box});`],
+    modafeminina: [`nwr["shop"~"^(clothes|fashion|boutique)$"]["name"](${box});`],
+    modamasculina: [`nwr["shop"~"^(clothes|fashion|boutique)$"]["name"](${box});`],
+    modainfantil: [`nwr["shop"~"^(clothes|baby_goods)$"]["name"](${box});`],
+    calcados: [`nwr["shop"="shoes"]["name"](${box});`],
+    joalheria: [`nwr["shop"~"^(jewelry|jewellery)$"]["name"](${box});`],
+    bijuteria: [`nwr["shop"~"^(jewelry|accessories)$"]["name"](${box});`],
+
+    // Casa / construção
+    movel: [`nwr["shop"="furniture"]["name"](${box});`],
+    decoracao: [`nwr["shop"~"^(furniture|interior_decoration)$"]["name"](${box});`],
+    construcao: [`nwr["shop"~"^(doityourself|hardware|trade)$"]["name"](${box});`],
+    ferramenta: [`nwr["shop"="hardware"]["name"](${box});`],
+    tinta: [`nwr["shop"="paint"]["name"](${box});`],
+
+    // Pet
+    petshop: [`nwr["shop"~"^(pet|pet_grooming)$"]["name"](${box});`],
+
+    // Serviços
+    advogado: [`nwr["office"="lawyer"]["name"](${box});`],
+    contador: [`nwr["office"="accountant"]["name"](${box});`],
+    imobiliaria: [`nwr["office"="estate_agent"]["name"](${box});`],
+    arquitetura: [`nwr["office"="architect"]["name"](${box});`],
+
+    // Educação
+    escola: [`nwr["amenity"~"^(school|kindergarten)$"]["name"](${box});`],
+    faculdade: [`nwr["amenity"~"^(college|university)$"]["name"](${box});`],
+    cursodeingles: [`nwr["amenity"~"^(language_school|college)$"]["name"](${box});`],
+
+    // Mercado
+    mercado: [`nwr["shop"~"^(supermarket|convenience|grocery|greengrocer)$"]["name"](${box});`],
+    hortifruti: [`nwr["shop"~"^(greengrocer|convenience)$"]["name"](${box});`],
+    acougue: [`nwr["shop"~"^(butcher)$"]["name"](${box});`],
+
+    // Esporte
+    academia: [
+      `nwr["leisure"~"^(fitness_centre|sports_centre|fitness_station)$"]["name"](${box});`,
+      `nwr["amenity"~"^(gym|dancing_school|dojo)$"]["name"](${box});`,
+      `nwr["sport"~"^(fitness|crossfit|yoga|pilates|bodybuilding|martial_arts|gymnastics|boxing)$"]["name"](${box});`
+    ],
+
+    // Automotivo
     oficina: [
       `nwr["shop"="car_repair"]["name"](${box});`,
-      `nwr["craft"~"^(mechanic|car_repair)$"]["name"](${box});`,
-      nameRegexFilter(box, ["oficina", "mecanica", "mecânica", "auto center"])
-    ]
+      `nwr["craft"~"^(mechanic|car_repair)$"]["name"](${box});`
+    ],
+    borracharia: [`nwr["shop"="tyres"]["name"](${box});`],
+    lavajato: [`nwr["amenity"="car_wash"]["name"](${box});`],
+
+    // Hospitalidade
+    hotel: [`nwr["tourism"~"^(hotel|motel|guest_house|hostel)$"]["name"](${box});`],
+    pousada: [`nwr["tourism"~"^(guest_house|hotel|hostel)$"]["name"](${box});`],
+
+    // Outros
+    livraria: [`nwr["shop"~"^(books|stationery)$"]["name"](${box});`],
+    papelaria: [`nwr["shop"="stationery"]["name"](${box});`],
+    floricultura: [`nwr["shop"="florist"]["name"](${box});`],
+    chaveiro: [`nwr["shop"="locksmith"]["name"](${box});`, `nwr["craft"="locksmith"]["name"](${box});`],
+    fotografo: [`nwr["shop"="photo"]["name"](${box});`],
+
+    // Tecnologia
+    assistenciatecnica: [
+      `nwr["shop"~"^(electronics|mobile_phone|computer)$"]["name"](${box});`,
+      `nwr["craft"="electronics_repair"]["name"](${box});`
+    ],
+    lojadecelular: [`nwr["shop"~"^(mobile_phone|electronics)$"]["name"](${box});`],
+    lojadeinformatica: [`nwr["shop"~"^(computer|electronics)$"]["name"](${box});`],
+
+    // Indústria / B2B
+    industria: [`nwr["man_made"="works"]["name"](${box});`, `nwr["landuse"="industrial"]["name"](${box});`]
   };
 
+  // 1) Preset específico do nicho
   const preset = presets[normalized] ?? presets[singular];
-  if (preset) return preset.join("\n");
-  return [nameRegexFilter(box, nicheTerms(normalized)), ...CATEGORY_KEYS.map((key) => `nwr["${key}"]["name"](${box});`)].join("\n");
+
+  // 2) Sempre adiciona regex de nome com os termos do catálogo central +
+  //    todos os termos do nicho (incluindo aliases). Cobre nomes que não
+  //    estão tagged certo no OSM (acontece muito no Brasil).
+  const nameTerms = getNicheMatchTerms(niche).filter((t) => t.length >= 4);
+
+  const filters: string[] = [];
+  if (preset) filters.push(...preset);
+  if (nameTerms.length > 0) filters.push(nameRegexFilter(box, nameTerms));
+
+  // 3) Se não tem preset E o nicho não está catalogado, escaneia categorias
+  //    amplas (qualquer shop/amenity/office). matchesNiche filtra depois.
+  if (!preset && !isNicheCatalogued(niche)) {
+    filters.push(...CATEGORY_KEYS.map((key) => `nwr["${key}"]["name"](${box});`));
+  }
+
+  return filters.join("\n");
 }
 
 function matchesNiche(tags: Record<string, string>, niche: string) {
@@ -276,19 +378,23 @@ function matchesNiche(tags: Record<string, string>, niche: string) {
       tags.tourism,
       tags.leisure,
       tags.healthcare,
+      tags.cuisine,
       tags.description
     ]
       .filter(Boolean)
       .join(" ")
   );
 
-  const terms = nicheTerms(needle);
+  // Se nicho NÃO está catalogado, confia no filtro Overpass (que já fez
+  // regex de nome). Aceita o lead.
+  if (!isNicheCatalogued(niche)) return true;
+
+  const terms = getNicheMatchTerms(niche).map(normalize).filter(Boolean);
   return terms.some((term) => containsTerm(haystack, term));
 }
 
 function nicheTerms(niche: string) {
-  const singular = niche.endsWith("s") ? niche.slice(0, -1) : niche;
-  return [niche, singular, ...(NICHE_ALIASES[niche] ?? []), ...(NICHE_ALIASES[singular] ?? [])];
+  return getNicheTerms(niche);
 }
 
 function nameRegexFilter(box: string, terms: string[]) {

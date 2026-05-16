@@ -36,9 +36,8 @@ export function LandingNav({ signedIn }: Props) {
     <>
       <div className="nav-shell">
         <nav className="nav" aria-label="Principal">
-          <Link href="/" className="nav-brand" onClick={() => setOpen(false)}>
-            <span className="nav-mark">G</span>
-            <span>Grynd</span>
+          <Link href="/" className="nav-brand" onClick={() => setOpen(false)} aria-label="Grynd">
+            <img src="/grynd-logo.svg" alt="Grynd" className="nav-logo" />
           </Link>
 
           {/* Wrapper invisível centralizado — links flutuam matematicamente no centro do nav. */}

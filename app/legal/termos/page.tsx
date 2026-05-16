@@ -140,9 +140,8 @@ export default async function TermsPage() {
 
       <footer className="lp-footer">
         <div className="lp-footer-inner">
-          <Link href="/" className="nav-brand">
-            <span className="nav-mark">G</span>
-            <span>Grynd</span>
+          <Link href="/" className="nav-brand" aria-label="Grynd">
+            <img src="/grynd-logo.svg" alt="Grynd" className="nav-logo" />
           </Link>
           <nav className="lp-footer-nav">
             <Link href="/pricing">Planos</Link>

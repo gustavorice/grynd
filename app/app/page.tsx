@@ -54,6 +54,17 @@ const sizeLabels: Record<CompanySize, string> = {
   grande: "Grande"
 };
 
+const NICHE_SUGGESTIONS = [
+  "hamburgueria",
+  "padaria",
+  "loja de roupas",
+  "barbearia",
+  "petshop",
+  "academia",
+  "salão de beleza",
+  "restaurante"
+];
+
 const DEFAULT_PROFILE: CompanyProfile = {
   brandName: "Grynd",
   offer: "Sites, automacoes e presenca digital para negocios locais",
@@ -404,9 +415,8 @@ export default function Home() {
   return (
     <main className="appShell">
       <header className="appHeader">
-        <button className="brandText" type="button" onClick={() => setView("search")}>
-          <img className="brandLogo" src="/arko-logo.png" alt="" />
-          <span>Grynd</span>
+        <button className="brandText" type="button" onClick={() => setView("search")} aria-label="Grynd">
+          <img className="brandLogo" src="/grynd-logo.svg" alt="Grynd" />
         </button>
         <nav className="navTabs">
           <NavButton active={view === "search"} icon={<Search size={16} />} label="Busca" onClick={() => setView("search")} />
@@ -419,13 +429,36 @@ export default function Home() {
               className={`planBadge plan-${me.plan.id}`}
               onClick={() => (me.plan.id === "free" ? startCheckout("pro") : openBillingPortal())}
               type="button"
-              title={me.plan.id === "free" ? "Fazer upgrade" : "Gerenciar assinatura"}
+              title={`${me.quota.searchesUsed} de ${me.quota.searchesIncluded} leads usados${me.quota.addonRemaining > 0 ? ` (+${me.quota.addonRemaining} addon)` : ""}`}
             >
-              {me.plan.id !== "free" && <Crown size={13} />}
-              <span>{me.plan.name}</span>
-              <span className="quotaCounter">
-                {me.quota.searchesUsed.toLocaleString("pt-BR")}/{me.quota.searchesIncluded.toLocaleString("pt-BR")}
-                {me.quota.addonRemaining > 0 ? ` +${me.quota.addonRemaining.toLocaleString("pt-BR")}` : ""}
+              <span className="planBadge-inner">
+                {me.plan.id !== "free" && <Crown size={13} />}
+                <span className="planBadge-name">{me.plan.name}</span>
+              </span>
+              <span className="planBadge-quota">
+                <span className="planBadge-track">
+                  <span
+                    className="planBadge-fill"
+                    style={{
+                      width: `${Math.min(
+                        100,
+                        Math.round(
+                          (me.quota.searchesUsed /
+                            Math.max(1, me.quota.searchesIncluded + me.quota.addonRemaining)) *
+                            100
+                        )
+                      )}%`
+                    }}
+                  />
+                </span>
+                <span className="planBadge-numbers">
+                  {me.quota.searchesUsed.toLocaleString("pt-BR")}
+                  <span className="planBadge-sep">/</span>
+                  {me.quota.searchesIncluded.toLocaleString("pt-BR")}
+                  {me.quota.addonRemaining > 0 && (
+                    <span className="planBadge-addon">+{me.quota.addonRemaining}</span>
+                  )}
+                </span>
               </span>
             </button>
           )}
@@ -451,30 +484,69 @@ export default function Home() {
       ) : (
         <section className="dashboardGrid">
           <aside className="searchCard glassPanel">
-            <div>
+            <header className="searchHeader">
               <span className="sectionLabel">Busca</span>
-              <h1>Busca de leads</h1>
+              <h1>Encontre leads</h1>
+            </header>
+
+            <div className="searchFields">
+              <label className="iconInput">
+                <span>Local</span>
+                <div className="iconInput-control">
+                  <MapPin size={15} className="iconInput-icon" />
+                  <input
+                    value={location}
+                    onChange={(event) => setLocation(event.target.value)}
+                    placeholder="Cidade, Estado"
+                  />
+                </div>
+              </label>
+              <label className="iconInput">
+                <span>Nicho</span>
+                <div className="iconInput-control">
+                  <Building2 size={15} className="iconInput-icon" />
+                  <input
+                    value={niche}
+                    onChange={(event) => setNiche(event.target.value)}
+                    placeholder="Ex: hamburgueria, padaria, loja de roupas"
+                  />
+                </div>
+              </label>
             </div>
-            <label>
-              Local
-              <input value={location} onChange={(event) => setLocation(event.target.value)} />
-            </label>
-            <label>
-              Nicho
-              <input value={niche} onChange={(event) => setNiche(event.target.value)} />
-            </label>
-            <button className="primaryButton" disabled={loading} onClick={() => void searchLeads("fast", false)} type="button">
-              {loading ? <RefreshCw className="spin" size={17} /> : <Search size={17} />}
-              {loading ? "Buscando..." : "Busca rapida"}
-            </button>
-            <button className="ghostButton" disabled={loading} onClick={() => void searchLeads("deep", false)} type="button" title="Varredura mais ampla (mais lento, mais leads)">
-              <Search size={14} />
-              Busca profunda
-            </button>
-            <button className="ghostButton" disabled={loading} onClick={() => void searchLeads("fast", true)} type="button" title="Ignora cache e refaz">
-              <RefreshCw size={14} />
-              Atualizar
-            </button>
+
+            <div className="searchActions">
+              <button
+                className="primaryButton btn-primary"
+                disabled={loading}
+                onClick={() => void searchLeads("fast", false)}
+                type="button"
+              >
+                {loading ? <RefreshCw className="spin" size={16} /> : <Search size={16} />}
+                {loading ? "Buscando..." : "Busca rápida"}
+              </button>
+              <div className="secondaryActions">
+                <button
+                  className="btn-outline"
+                  disabled={loading}
+                  onClick={() => void searchLeads("deep", false)}
+                  type="button"
+                  title="Varredura mais ampla (mais lento, mais leads)"
+                >
+                  <Search size={14} />
+                  Busca profunda
+                </button>
+                <button
+                  className="btn-ghost"
+                  disabled={loading}
+                  onClick={() => void searchLeads("fast", true)}
+                  type="button"
+                  title="Ignora cache e refaz"
+                  aria-label="Atualizar"
+                >
+                  <RefreshCw size={14} />
+                </button>
+              </div>
+            </div>
             {me?.plan.addonAvailable && me.quota.searchesAvailable <= 50 && (
               <button className="addonButton" onClick={() => void startAddonCheckout()} type="button">
                 <Plus size={14} />
@@ -537,15 +609,28 @@ export default function Home() {
               </button>
             )}
             <p className="notice">{notice}</p>
-            <div className="miniStats">
-              <Metric label="Na busca" value={stats.total} />
-              <Metric label="Salvos" value={stats.saved} />
-              <Metric label="WhatsApp" value={stats.whatsapp} />
-              <Metric label="Social" value={stats.social} />
-            </div>
           </aside>
 
           <section className="leadColumn">
+            <div className="statsRow">
+              <span className="statsRow-chip">
+                <span className="statsRow-label">Na busca</span>
+                <span className="statsRow-value">{stats.total}</span>
+              </span>
+              <span className="statsRow-chip">
+                <span className="statsRow-label">Salvos</span>
+                <span className="statsRow-value">{stats.saved}</span>
+              </span>
+              <span className="statsRow-chip">
+                <span className="statsRow-label">WhatsApp</span>
+                <span className="statsRow-value">{stats.whatsapp}</span>
+              </span>
+              <span className="statsRow-chip">
+                <span className="statsRow-label">Social</span>
+                <span className="statsRow-value">{stats.social}</span>
+              </span>
+            </div>
+
             <div className="toolbar glassPanel">
               <div className="toolbarTitle">
                 <SlidersHorizontal size={17} />
@@ -585,17 +670,54 @@ export default function Home() {
                   <CheckCircle2 size={16} />
                 </button>
               </div>
-              <button className="exportButton" onClick={exportCsv} type="button" title="Exportar leads filtrados pra CSV">
+              <button
+                className="exportButton"
+                onClick={exportCsv}
+                type="button"
+                disabled={filteredLeads.length === 0}
+                title={
+                  filteredLeads.length === 0
+                    ? "Faça uma busca primeiro pra ter leads pra exportar"
+                    : `Exportar ${filteredLeads.length} leads filtrados pra CSV`
+                }
+              >
                 <Download size={15} />
                 Exportar CSV
+                {filteredLeads.length > 0 && (
+                  <span className="exportButton-count">{filteredLeads.length}</span>
+                )}
               </button>
             </div>
 
             <div className="leadList glassPanel">
               {filteredLeads.length === 0 ? (
-                <div className="emptyState">
-                  <strong>Nenhum lead nesta lista</strong>
-                  <span>Busque outro nicho ou ajuste os filtros.</span>
+                <div className="emptyState emptyState-rich">
+                  <div className="emptyState-icon">
+                    <Search size={22} />
+                  </div>
+                  <strong>{searchResults.length === 0 ? "Faça sua primeira busca" : "Nenhum lead com esses filtros"}</strong>
+                  <span>
+                    {searchResults.length === 0
+                      ? "Digite um nicho à esquerda ou tente um destes:"
+                      : "Tente ajustar os filtros acima ou buscar outro nicho."}
+                  </span>
+                  {searchResults.length === 0 && (
+                    <div className="emptyState-chips">
+                      {NICHE_SUGGESTIONS.map((suggestion) => (
+                        <button
+                          key={suggestion}
+                          type="button"
+                          className="emptyState-chip"
+                          onClick={() => {
+                            setNiche(suggestion);
+                            void searchLeads("fast", false);
+                          }}
+                        >
+                          {suggestion}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ) : (
                 filteredLeads.map((lead) => (

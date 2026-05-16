@@ -269,6 +269,18 @@ p {
   width: 26px;
 }
 
+.nav-logo {
+  display: block;
+  height: 30px;
+  object-fit: contain;
+  width: auto;
+  max-width: 140px;
+}
+
+.auth-brand .nav-logo {
+  height: 38px;
+}
+
 .nav-links {
   align-items: center;
   display: flex;
@@ -1707,9 +1719,10 @@ p {
 
 .brandLogo {
   display: block;
-  height: 30px;
+  height: 32px;
   object-fit: contain;
-  width: 30px;
+  max-width: 140px;
+  width: auto;
 }
 
 .navTabs {
@@ -1754,19 +1767,21 @@ p {
   align-items: center;
   background: var(--bg-elev-1);
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: 10px;
   color: var(--ink);
+  cursor: pointer;
   display: inline-flex;
   font-size: 12px;
   font-weight: 600;
-  gap: 8px;
+  gap: 12px;
   letter-spacing: -0.01em;
-  min-height: 32px;
-  padding: 0 12px;
-  transition: border 160ms ease;
+  min-height: 38px;
+  padding: 6px 12px;
+  transition: border 200ms ease, background 200ms ease;
 }
 
 .planBadge:hover {
+  background: var(--bg-elev-2);
   border-color: var(--line-strong);
 }
 
@@ -1778,6 +1793,61 @@ p {
 .planBadge.plan-agency {
   background: var(--bg-elev-3);
   border-color: var(--line-stronger);
+}
+
+.planBadge-inner {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.planBadge-name {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.planBadge-quota {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+}
+
+.planBadge-track {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  display: inline-block;
+  height: 4px;
+  overflow: hidden;
+  position: relative;
+  width: 64px;
+}
+
+.planBadge-fill {
+  background: var(--ink);
+  display: block;
+  height: 100%;
+  transition: width 320ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.planBadge-numbers {
+  align-items: baseline;
+  color: var(--ink-muted-2);
+  display: inline-flex;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  gap: 2px;
+}
+
+.planBadge-sep {
+  color: var(--ink-soft);
+  margin: 0 1px;
+}
+
+.planBadge-addon {
+  color: var(--ink);
+  margin-left: 6px;
+  font-weight: 600;
 }
 
 .signOutButton {
@@ -1825,10 +1895,148 @@ p {
   align-content: start;
   align-self: start;
   display: grid;
-  gap: 14px;
-  padding: 18px;
+  gap: 22px;
+  padding: 22px;
   position: sticky;
   top: 22px;
+}
+
+.searchHeader {
+  display: grid;
+  gap: 4px;
+}
+
+.searchHeader h1 {
+  font-size: 22px;
+  margin: 0;
+}
+
+.searchFields {
+  display: grid;
+  gap: 14px;
+}
+
+.iconInput {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-muted-2);
+}
+
+.iconInput > span {
+  letter-spacing: 0.02em;
+}
+
+.iconInput-control {
+  align-items: center;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  min-height: 42px;
+  transition: border-color 200ms ease, background 200ms ease;
+}
+
+.iconInput-control:focus-within {
+  background: var(--bg-elev-3);
+  border-color: var(--line-stronger);
+}
+
+.iconInput-icon {
+  color: var(--ink-muted-2);
+  justify-self: center;
+}
+
+.iconInput input {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 500;
+  min-height: 42px;
+  padding: 0 12px 0 0;
+  width: 100%;
+}
+
+.iconInput input::placeholder {
+  color: var(--ink-soft);
+  font-weight: 400;
+}
+
+.iconInput input:focus {
+  background: transparent;
+  border: 0;
+}
+
+.searchActions {
+  display: grid;
+  gap: 8px;
+}
+
+.btn-primary,
+.btn-outline,
+.btn-ghost {
+  align-items: center;
+  border-radius: 10px;
+  display: inline-flex;
+  font-size: 13.5px;
+  font-weight: 600;
+  gap: 8px;
+  justify-content: center;
+  letter-spacing: -0.01em;
+  min-height: 42px;
+  padding: 0 16px;
+  transition: background 200ms ease, border-color 200ms ease, color 200ms ease, opacity 200ms ease;
+  width: 100%;
+}
+
+.btn-primary {
+  background: var(--ink);
+  border: 1px solid var(--ink);
+  color: var(--accent-ink);
+}
+
+.btn-primary:hover {
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+}
+
+.btn-outline {
+  background: transparent;
+  border: 1px solid var(--line-stronger);
+  color: var(--ink);
+}
+
+.btn-outline:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--ink-muted);
+}
+
+.btn-ghost {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--ink-muted);
+}
+
+.btn-ghost:hover {
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+.secondaryActions {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr 42px;
+}
+
+.secondaryActions .btn-ghost {
+  padding: 0;
 }
 
 .sectionLabel {
@@ -1970,8 +2178,22 @@ input:focus {
   transition: background 160ms ease;
 }
 
-.exportButton:hover {
+.exportButton:hover:not(:disabled) {
   background: var(--bg-elev-3);
+}
+
+.exportButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.exportButton-count {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  padding: 2px 7px;
 }
 
 .addonButton,
@@ -2037,8 +2259,48 @@ input:focus {
   align-content: start;
   display: grid;
   gap: 12px;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   min-width: 0;
+}
+
+/* ====== Stats chips no topo do painel central ====== */
+
+.statsRow {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.statsRow-chip {
+  align-items: baseline;
+  background: var(--bg-elev-1);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  display: inline-flex;
+  gap: 8px;
+  padding: 6px 14px;
+  transition: border-color 200ms ease;
+}
+
+.statsRow-chip:hover {
+  border-color: var(--line-strong);
+}
+
+.statsRow-label {
+  color: var(--ink-muted-2);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.statsRow-value {
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
 }
 
 .toolbar {
@@ -2351,6 +2613,65 @@ input:focus {
 
 .emptyState strong {
   color: var(--ink);
+}
+
+.emptyState-rich {
+  gap: 14px;
+  min-height: 320px;
+  padding: 48px 32px;
+}
+
+.emptyState-icon {
+  align-items: center;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  color: var(--ink-muted);
+  display: inline-flex;
+  height: 52px;
+  justify-content: center;
+  width: 52px;
+}
+
+.emptyState-rich strong {
+  color: var(--ink);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.emptyState-rich > span {
+  color: var(--ink-muted);
+  font-size: 14px;
+  line-height: 1.5;
+  max-width: 380px;
+}
+
+.emptyState-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  margin-top: 8px;
+  max-width: 480px;
+}
+
+.emptyState-chip {
+  background: var(--bg-elev-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  padding: 7px 14px;
+  transition: background 200ms ease, border-color 200ms ease;
+}
+
+.emptyState-chip:hover {
+  background: var(--bg-elev-3);
+  border-color: var(--line-strong);
 }
 
 .profileGrid {

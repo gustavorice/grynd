@@ -7,9 +7,8 @@ export default function SignUpPage() {
     <main className="auth-shell">
       <ClerkBadgeKiller />
       <div className="auth-stack">
-        <Link className="auth-brand" href="/">
-          <span className="nav-mark">G</span>
-          Grynd
+        <Link className="auth-brand" href="/" aria-label="Grynd">
+          <img src="/grynd-logo.svg" alt="Grynd" className="nav-logo" />
         </Link>
         <SignUp
           appearance={{

@@ -28,11 +28,13 @@ export default async function PrivacyPage() {
         <section>
           <h2>1. Quem somos</h2>
           <p>
-            Grynd é uma plataforma de prospecção operada por Gustavo Rice (CPF a ser
-            adicionado), com sede em Rio Claro/SP.
+            Grynd é uma plataforma brasileira de prospecção de leads locais, sediada no
+            estado de São Paulo. Os dados completos do controlador podem ser solicitados
+            por escrito via canal abaixo.
           </p>
           <p>
-            Encarregado de Dados (DPO): <a href="mailto:contato@grynd.com.br">contato@grynd.com.br</a>
+            Contato e Encarregado de Dados (DPO):
+            <a href="mailto:contato@grynd.com.br"> contato@grynd.com.br</a>
           </p>
         </section>
 

@@ -125,7 +125,7 @@ export default async function TermsPage() {
         <section>
           <h2>9. Foro</h2>
           <p>
-            Fica eleito o foro da comarca de Rio Claro/SP para dirimir quaisquer
+            Fica eleito o foro da comarca de São Paulo/SP para dirimir quaisquer
             controvérsias decorrentes deste contrato.
           </p>
         </section>

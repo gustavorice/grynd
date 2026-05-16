@@ -1,4 +1,5 @@
 import { diagnoseLead } from "@/lib/diagnose";
+import { getNicheMatchTerms, getNicheTerms } from "@/lib/niches";
 import { extractBrazilPhone, normalizeBrazilPhone } from "@/lib/phone";
 import { launchBrowser } from "@/lib/providers/browser";
 import type { Lead } from "@/lib/types";
@@ -15,10 +16,10 @@ type ScrapedPlace = {
 
 type ScrapedContact = Pick<ScrapedPlace, "phone" | "website" | "instagram" | "facebook">;
 
-const SCRAPE_CONCURRENCY = 4;
-const SCROLL_STEPS = 3;
-const CONTACT_HYDRATION_LIMIT = 10;
-const CONTACT_CONCURRENCY = 8;
+const SCRAPE_CONCURRENCY = 5;
+const SCROLL_STEPS = 6; // mais scrolls = mais leads por query
+const CONTACT_HYDRATION_LIMIT = 15;
+const CONTACT_CONCURRENCY = 10;
 
 export async function searchGoogleMapsScrape(params: {
   niche: string;
@@ -222,28 +223,30 @@ async function blockHeavyAssets(page: any) {
 }
 
 function buildScrapeQueries(niche: string, location: string) {
-  const normalized = normalize(niche);
-  const singular = normalized.endsWith("s") ? normalized.slice(0, -1) : normalized;
-  const aliases: Record<string, string[]> = {
-    sorveteria: ["sorvetes", "gelateria", "gelato", "acai", "açaí", "ice cream"],
-    academia: ["academia", "fitness", "crossfit", "pilates", "yoga", "musculacao", "musculação", "personal trainer"],
-    restaurante: ["restaurante", "lanchonete", "pizzaria", "hamburgueria", "cafe", "bar"],
-    dentista: ["dentista", "odontologia", "clinica odontologica"],
-    advogado: ["advogado", "advocacia", "escritorio de advocacia"],
-    farmacia: ["farmacia", "farmácia", "drogaria"],
-    mercado: ["mercado", "supermercado", "mercearia"],
-    clinica: ["clinica", "clínica", "consultorio medico", "médico"],
-    oficina: ["oficina mecanica", "auto center", "mecanica automotiva"]
-  };
-  const terms = [niche, singular, ...(aliases[normalized] ?? []), ...(aliases[singular] ?? [])];
-  return Array.from(new Set(terms.map((term) => `${term} ${location}`)));
+  const terms = getNicheTerms(niche);
+
+  // Variações de query — capturam diferentes intenções de busca do Google.
+  const variations: string[] = [];
+  for (const term of terms) {
+    variations.push(`${term} ${location}`);
+    variations.push(`${term} em ${location}`);
+  }
+  // Variantes "melhores X" e "X perto" geram diferentes feeds do Maps,
+  // capturando estabelecimentos que o feed default não traz.
+  if (terms.length > 0) {
+    variations.push(`melhores ${terms[0]} ${location}`);
+    variations.push(`${terms[0]} proximo ${location}`);
+  }
+
+  return Array.from(new Set(variations));
 }
 
 function queryLimit(limit: number) {
-  if (limit >= 80) return 10;
-  if (limit >= 40) return 8;
-  if (limit >= 20) return 6;
-  return 4;
+  // Mais queries = mais cobertura, mais tempo. Calibrado pra caber em 60s.
+  if (limit >= 100) return 18;
+  if (limit >= 60) return 14;
+  if (limit >= 30) return 10;
+  return 6;
 }
 
 function chunk<T>(items: T[], size: number) {
@@ -254,29 +257,39 @@ function chunk<T>(items: T[], size: number) {
   return chunks;
 }
 
+// Exclusões por nicho — termos que NÃO devem aparecer no resultado.
+// Ex: ao buscar "sorveteria", excluímos supermercado (que vende sorvete mas
+// não é o negócio que o usuário quer prospectar).
+const NICHE_EXCLUSIONS: Record<string, string[]> = {
+  sorveteria: ["atacadista", "supermercado", "mercado atacado"],
+  acai: ["atacadista", "supermercado"],
+  academia: ["sorveteria", "lanchonete", "restaurante", "fast food"],
+  hamburgueria: ["academia", "fitness"],
+  pizzaria: ["academia", "fitness"],
+  cafeteria: ["academia"],
+  petshop: ["restaurante", "lanchonete"],
+  loja: ["restaurante"],
+  lojaderoupas: ["restaurante", "academia", "farmacia"]
+};
+
 function matchesScrapedNiche(place: ScrapedPlace, niche: string) {
   const parsed = parseGoogleCardText(place.cardText, place.name);
-  const text = normalize(`${place.name} ${parsed.category ?? ""}`);
-  const base = normalize(niche);
-  const singular = base.endsWith("s") ? base.slice(0, -1) : base;
-  const termsByNiche: Record<string, string[]> = {
-    sorveteria: ["sorveteria", "sorvete", "gelateria", "gelato", "ice cream", "acai", "açai", "açaí", "milk moo", "ice creamy"],
-    academia: ["academia", "fitness", "gym", "crossfit", "pilates", "yoga", "musculacao", "musculação", "boxe", "muay thai", "dojo", "treinamento"],
-    restaurante: ["restaurante", "restaurant", "lanchonete", "pizzaria", "hamburgueria", "burger", "cafe", "bar", "fast food"],
-    dentista: ["dentista", "dentist", "odontologia", "odontologico", "odontológico"],
-    advogado: ["advogado", "advocacia", "lawyer", "juridico", "jurídico"],
-    farmacia: ["farmacia", "farmácia", "drogaria", "pharmacy"],
-    mercado: ["mercado", "supermercado", "mercearia", "supermarket"],
-    clinica: ["clinica", "clínica", "clinic", "medico", "médico"],
-    oficina: ["oficina", "mecanica", "mecânica", "auto center", "mechanic"]
-  };
-  const excludedByNiche: Record<string, string[]> = {
-    sorveteria: ["atacadista", "supermercado", "mercado atacado"],
-    academia: ["lanchonete", "restaurante", "fast food", "sorveteria"]
-  };
-  const terms = [base, singular, ...(termsByNiche[base] ?? []), ...(termsByNiche[singular] ?? [])].map(normalize);
-  const excluded = [...(excludedByNiche[base] ?? []), ...(excludedByNiche[singular] ?? [])].map(normalize);
-  return terms.some((term) => text.includes(term)) && !excluded.some((term) => text.includes(term));
+  const haystack = normalize(`${place.name} ${parsed.category ?? ""}`);
+
+  const matchTerms = getNicheMatchTerms(niche).map(normalize).filter(Boolean);
+  const normalizedNiche = normalize(niche).replace(/\s+/g, "");
+  const singularNiche = normalizedNiche.endsWith("s")
+    ? normalizedNiche.slice(0, -1)
+    : normalizedNiche;
+
+  const excluded = [
+    ...(NICHE_EXCLUSIONS[normalizedNiche] ?? []),
+    ...(NICHE_EXCLUSIONS[singularNiche] ?? [])
+  ].map(normalize);
+
+  const matches = matchTerms.some((term) => haystack.includes(term));
+  const isExcluded = excluded.some((term) => term && haystack.includes(term));
+  return matches && !isExcluded;
 }
 
 function toLead(place: ScrapedPlace, params: { niche: string; location: string }) {

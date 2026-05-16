@@ -3031,6 +3031,207 @@ input:focus {
   min-height: 36px;
 }
 
+/* ====== Welcome modal (pós-checkout premium) ====== */
+
+.welcomeOverlay {
+  align-items: center;
+  animation: welcome-fade 280ms ease-out;
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 24px;
+  position: fixed;
+  z-index: 70;
+}
+
+.welcomeOverlay-backdrop {
+  background: rgba(0, 0, 0, 0.7);
+  border: 0;
+  cursor: pointer;
+  inset: 0;
+  position: absolute;
+}
+
+.welcomeModal {
+  animation: welcome-rise 340ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  background: linear-gradient(180deg, var(--bg-elev-2) 0%, var(--bg-elev-1) 100%);
+  border: 1px solid var(--line-stronger);
+  border-radius: 20px;
+  box-shadow: 0 32px 80px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  display: grid;
+  gap: 18px;
+  max-width: 440px;
+  overflow: hidden;
+  padding: 36px 32px 32px;
+  position: relative;
+  text-align: center;
+  width: 100%;
+}
+
+.welcomeModal-glow {
+  background: radial-gradient(
+    ellipse 80% 100% at 50% 0%,
+    rgba(255, 255, 255, 0.12),
+    rgba(255, 255, 255, 0.04) 40%,
+    transparent 70%
+  );
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+}
+
+.welcomeModal > * {
+  position: relative;
+  z-index: 1;
+}
+
+.welcomeModal-close {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink-muted);
+  cursor: pointer;
+  display: inline-flex;
+  height: 30px;
+  justify-content: center;
+  padding: 0;
+  position: absolute;
+  right: 16px;
+  top: 16px;
+  transition: background 200ms ease, color 200ms ease, border-color 200ms ease;
+  width: 30px;
+  z-index: 2;
+}
+
+.welcomeModal-close:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+.welcomeModal-icon {
+  align-items: center;
+  background: var(--ink);
+  border-radius: 18px;
+  box-shadow: 0 8px 24px rgba(255, 255, 255, 0.12);
+  color: var(--accent-ink);
+  display: inline-flex;
+  height: 60px;
+  justify-content: center;
+  justify-self: center;
+  width: 60px;
+}
+
+.welcomeModal-eyebrow {
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.welcomeModal-title {
+  color: var(--ink);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  margin: 0;
+}
+
+.welcomeModal-sub {
+  color: var(--ink-muted);
+  font-size: 14.5px;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.welcomeModal-features {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 8px 0 4px;
+  padding: 16px 18px;
+  text-align: left;
+}
+
+.welcomeModal-features li {
+  align-items: center;
+  color: var(--ink);
+  display: grid;
+  font-size: 13.5px;
+  gap: 10px;
+  grid-template-columns: 16px minmax(0, 1fr);
+  letter-spacing: -0.01em;
+}
+
+.welcomeModal-features svg {
+  color: var(--ink-muted);
+}
+
+.welcomeModal-cta {
+  align-items: center;
+  background: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: 10px;
+  color: var(--accent-ink);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 14px;
+  font-weight: 600;
+  gap: 8px;
+  justify-content: center;
+  letter-spacing: -0.01em;
+  min-height: 46px;
+  padding: 0 22px;
+  transition: opacity 200ms ease, transform 200ms ease;
+}
+
+.welcomeModal-cta:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+@keyframes welcome-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes welcome-rise {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .welcomeOverlay,
+  .welcomeModal {
+    animation: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .welcomeModal {
+    padding: 28px 24px 24px;
+  }
+  .welcomeModal-title {
+    font-size: 24px;
+  }
+}
+
 /* ====== Support widget (FAQ flutuante) ====== */
 
 .support-trigger {

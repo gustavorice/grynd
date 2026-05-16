@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { SupportWidget } from "@/app/_components/SupportWidget";
+import { WelcomeModal } from "@/app/_components/WelcomeModal";
 import type { Plan, PlanId } from "@/lib/plans";
 import type { CompanyProfile } from "@/lib/profile";
 import type { QuotaSnapshot } from "@/lib/quota";
@@ -88,6 +89,11 @@ export default function Home() {
   const [insights, setInsights] = useState<Record<string, string>>({});
   const [profile, setProfile] = useState<CompanyProfile>(DEFAULT_PROFILE);
   const [me, setMe] = useState<Me | null>(null);
+  const [welcome, setWelcome] = useState<null | {
+    kind: "upgrade-pro" | "upgrade-agency" | "addon";
+    planName?: string;
+    searchesIncluded?: number;
+  }>(null);
   const [showExpand, setShowExpand] = useState(false);
   const [extraLocationsInput, setExtraLocationsInput] = useState("");
 
@@ -149,6 +155,18 @@ export default function Home() {
 
     const initial = await loadMeRaw();
     if (initial) setMe(initial);
+
+    // Abre modal premium depois que /api/me responde — assim mostra com o
+    // nome correto do plano e quota atualizada.
+    if (justUpgraded && initial) {
+      setWelcome({
+        kind: initial.user.plan === "agency" ? "upgrade-agency" : "upgrade-pro",
+        planName: initial.plan.name,
+        searchesIncluded: initial.plan.searchesPerMonth
+      });
+    } else if (justBoughtAddon) {
+      setWelcome({ kind: "addon" });
+    }
 
     // Fallback: se ainda está como Free, tenta sincronizar uma vez (resgata
     // pagamentos onde webhook não chegou e o user não voltou de ?billing=success).
@@ -815,6 +833,15 @@ export default function Home() {
       )}
 
       <SupportWidget />
+
+      {welcome && (
+        <WelcomeModal
+          kind={welcome.kind}
+          planName={welcome.planName}
+          searchesIncluded={welcome.searchesIncluded}
+          onClose={() => setWelcome(null)}
+        />
+      )}
     </main>
   );
 }

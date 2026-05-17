@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
-import { AuthError, getOrSyncUser } from "@/lib/auth";
+import { getOrSyncUser } from "@/lib/auth";
 import { db } from "@/lib/db/client";
 import { subscriptions } from "@/lib/db/schema";
+import { safeError } from "@/lib/errors";
 import { PLANS, type PlanId } from "@/lib/plans";
+import { enforceApiLimit } from "@/lib/rate-limit";
 import { getStripePriceId, stripe } from "@/lib/stripe";
 
 const BodySchema = z.object({
@@ -14,6 +16,8 @@ const BodySchema = z.object({
 export async function POST(request: Request) {
   try {
     const user = await getOrSyncUser();
+    const limited = await enforceApiLimit(user.id);
+    if (limited) return limited;
     const { plan } = BodySchema.parse(await request.json());
     const planConfig = PLANS[plan as PlanId];
     if (!planConfig.stripePriceEnv) {
@@ -79,20 +83,10 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ url: session.url });
   } catch (error) {
-    return errorResponse(error);
+    return safeError(error, "Erro no checkout.");
   }
 }
 
 function getBaseUrl(request: Request) {
   return process.env.NEXT_PUBLIC_APP_URL ?? new URL(request.url).origin;
-}
-
-function errorResponse(error: unknown) {
-  if (error instanceof AuthError) {
-    return NextResponse.json({ error: error.message }, { status: error.status });
-  }
-  return NextResponse.json(
-    { error: error instanceof Error ? error.message : "Erro no checkout." },
-    { status: 400 }
-  );
 }

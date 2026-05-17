@@ -4,18 +4,18 @@ import { z } from "zod";
 // Pode invocar scraping de fallback pra hidratar contato — mesmo timeout da busca.
 export const maxDuration = 60;
 export const runtime = "nodejs";
-import { AuthError, getOrSyncUser } from "@/lib/auth";
+import { getOrSyncUser } from "@/lib/auth";
+import { LeadInputSchema, safeError } from "@/lib/errors";
 import { normalizeBrazilPhone } from "@/lib/phone";
 import { PLANS, type PlanId } from "@/lib/plans";
 import { scrapeGoogleMapsContact } from "@/lib/providers/google-maps-scrape";
 import { enforceApiLimit } from "@/lib/rate-limit";
 import { upsertLead } from "@/lib/store";
-import type { Lead } from "@/lib/types";
 
 const SendSchema = z.object({
-  lead: z.custom<Lead>((value) => Boolean(value && typeof value === "object")),
-  to: z.string().optional(),
-  text: z.string().min(1)
+  lead: LeadInputSchema,
+  to: z.string().max(40).optional(),
+  text: z.string().min(1).max(4000)
 });
 
 export async function POST(request: Request) {
@@ -31,7 +31,26 @@ export async function POST(request: Request) {
     const allowCloudApi = plan.canUseWhatsAppCloud && phoneNumberId && token;
 
     let hydratedLead = lead;
-    let recipient = normalizeBrazilPhone(to ?? lead.whatsapp ?? lead.phone);
+    // Numeros candidatos vindos do proprio lead (whatsapp, phone). O `to` opcional
+    // SÓ é aceito se bater com um desses numeros — impede spam pra qualquer número
+    // arbitrario passando pelo token do WhatsApp Cloud API.
+    const leadCandidates = new Set(
+      [lead.whatsapp, lead.phone]
+        .map((n) => normalizeBrazilPhone(n))
+        .filter((n): n is string => Boolean(n))
+    );
+
+    let recipient: string | null = null;
+    if (to) {
+      const normalizedTo = normalizeBrazilPhone(to);
+      if (normalizedTo && leadCandidates.has(normalizedTo)) {
+        recipient = normalizedTo;
+      } else {
+        throw new Error("Numero de destino nao bate com o telefone do lead.");
+      }
+    } else {
+      recipient = normalizeBrazilPhone(lead.whatsapp ?? lead.phone) ?? null;
+    }
 
     if (!recipient && lead.mapsUrl?.includes("google.com/maps")) {
       const contact = await scrapeGoogleMapsContact(lead.mapsUrl);
@@ -43,7 +62,7 @@ export async function POST(request: Request) {
         facebook: contact.facebook ?? lead.facebook,
         updatedAt: new Date().toISOString()
       };
-      recipient = normalizeBrazilPhone(contact.phone);
+      recipient = normalizeBrazilPhone(contact.phone) ?? null;
     }
 
     if (!recipient) {
@@ -96,12 +115,6 @@ export async function POST(request: Request) {
       url: `https://wa.me/${recipient}?text=${encodeURIComponent(text)}`
     });
   } catch (error) {
-    if (error instanceof AuthError) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Erro ao enviar para WhatsApp." },
-      { status: 400 }
-    );
+    return safeError(error, "Erro ao enviar para WhatsApp.");
   }
 }

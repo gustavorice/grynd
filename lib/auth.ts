@@ -48,36 +48,49 @@ export async function getOrSyncUser(): Promise<DbUser> {
 
   // 3) Se já existe um user com este email mas ID diferente, migra o ID
   //    (caso típico: troca de instância Clerk dev↔prod com mesmo email).
-  //    Atualizar o PK em cascata via UPDATE em users e ajustar FKs manualmente
-  //    seria complexo — em vez disso, retornamos o user antigo e atualizamos
-  //    o id pra refletir a sessão atual.
+  //
+  //    Sequência crítica (não pode mudar a ordem):
+  //      a) Renomeia o email do user antigo pra um placeholder. Isso libera
+  //         a constraint UNIQUE de users.email pro novo registro.
+  //      b) INSERE o novo user com o email "limpo".
+  //      c) Migra todas as FKs (subscriptions, search_quota, etc.) pro novo id.
+  //      d) DELETA o registro antigo (já sem FKs apontando pra ele).
+  //
+  //    Se rodar tudo numa transação, ou tudo passa ou nada acontece — sem
+  //    estados intermediários expostos.
   const byEmail = await db.select().from(users).where(eq(users.email, email)).limit(1);
   if (byEmail[0]) {
-    // Atualiza in-place: o user existente passa a ter o novo userId do Clerk.
-    // FKs com ON DELETE CASCADE não bloqueiam UPDATE de PK porque não há ON UPDATE.
-    // Solução robusta: usar transação que atualiza users.id e todas as FKs.
+    const oldId = byEmail[0].id;
+    const oldFullName = byEmail[0].fullName;
+    const oldImageUrl = byEmail[0].imageUrl;
+    const oldPlan = byEmail[0].plan;
+    const placeholderEmail = `migrating-${oldId}-${Date.now()}@grynd.invalid`;
+
     await db.transaction(async (tx) => {
-      const oldId = byEmail[0].id;
-      // Cria novo row com o novo id, copiando os dados
+      // (a) Libera o email do registro antigo
       await tx
-        .insert(users)
-        .values({
-          id: userId,
-          email,
-          fullName: fullName ?? byEmail[0].fullName,
-          imageUrl: imageUrl ?? byEmail[0].imageUrl,
-          plan: byEmail[0].plan
-        })
-        .onConflictDoNothing();
-      // Migra todas as FKs do oldId pro userId. Usamos SQL bruto pra UPDATEs em
-      // todas as tabelas que referenciam users.id.
+        .update(users)
+        .set({ email: placeholderEmail, updatedAt: new Date() })
+        .where(eq(users.id, oldId));
+
+      // (b) Cria o novo registro com o email original
+      await tx.insert(users).values({
+        id: userId,
+        email,
+        fullName: fullName ?? oldFullName,
+        imageUrl: imageUrl ?? oldImageUrl,
+        plan: oldPlan
+      });
+
+      // (c) Migra todas as FKs do oldId pro novo userId
       await tx.execute(sql`UPDATE subscriptions SET user_id = ${userId} WHERE user_id = ${oldId}`);
       await tx.execute(sql`UPDATE search_quota SET user_id = ${userId} WHERE user_id = ${oldId}`);
       await tx.execute(sql`UPDATE addon_purchases SET user_id = ${userId} WHERE user_id = ${oldId}`);
       await tx.execute(sql`UPDATE search_history SET user_id = ${userId} WHERE user_id = ${oldId}`);
       await tx.execute(sql`UPDATE leads SET user_id = ${userId} WHERE user_id = ${oldId}`);
       await tx.execute(sql`UPDATE company_profile SET user_id = ${userId} WHERE user_id = ${oldId}`);
-      // Apaga o registro antigo
+
+      // (d) Apaga o registro antigo (já sem FKs apontando pra ele)
       await tx.delete(users).where(eq(users.id, oldId));
     });
 

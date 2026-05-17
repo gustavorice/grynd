@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { AuthError, getOrSyncUser } from "@/lib/auth";
+import { getOrSyncUser } from "@/lib/auth";
+import { safeError } from "@/lib/errors";
 import { getOrCreateQuota } from "@/lib/quota";
 import { PLANS, type PlanId } from "@/lib/plans";
 
@@ -19,12 +20,6 @@ export async function GET() {
       quota
     });
   } catch (error) {
-    if (error instanceof AuthError) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Erro." },
-      { status: 500 }
-    );
+    return safeError(error, "Erro ao carregar perfil.");
   }
 }

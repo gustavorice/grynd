@@ -1,14 +1,18 @@
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
-import { AuthError, getOrSyncUser } from "@/lib/auth";
+import { getOrSyncUser } from "@/lib/auth";
 import { db } from "@/lib/db/client";
 import { subscriptions } from "@/lib/db/schema";
+import { safeError } from "@/lib/errors";
 import { ADDON_200_SEARCHES, PLANS, type PlanId } from "@/lib/plans";
+import { enforceApiLimit } from "@/lib/rate-limit";
 import { getStripePriceId, stripe } from "@/lib/stripe";
 
 export async function POST(request: Request) {
   try {
     const user = await getOrSyncUser();
+    const limited = await enforceApiLimit(user.id);
+    if (limited) return limited;
     const plan = user.plan as PlanId;
     if (!ADDON_200_SEARCHES.eligiblePlans.includes(plan)) {
       throw new Error(
@@ -46,13 +50,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ url: session.url });
   } catch (error) {
-    if (error instanceof AuthError) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Erro ao gerar checkout do addon." },
-      { status: 400 }
-    );
+    return safeError(error, "Erro ao gerar checkout do addon.");
   }
 }
 

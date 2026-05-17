@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
-import { AuthError, getOrSyncUser } from "@/lib/auth";
+import { getOrSyncUser } from "@/lib/auth";
 import { db } from "@/lib/db/client";
 import { subscriptions } from "@/lib/db/schema";
+import { safeError } from "@/lib/errors";
 import { planFromStripePriceId } from "@/lib/plans";
 import { applyPlanChange } from "@/lib/quota";
+import { enforceApiLimit } from "@/lib/rate-limit";
 import { stripe } from "@/lib/stripe";
 
 /**
@@ -20,6 +22,8 @@ import { stripe } from "@/lib/stripe";
 export async function POST() {
   try {
     const user = await getOrSyncUser();
+    const limited = await enforceApiLimit(user.id);
+    if (limited) return limited;
     const sub = (
       await db.select().from(subscriptions).where(eq(subscriptions.userId, user.id)).limit(1)
     )[0];
@@ -72,12 +76,6 @@ export async function POST() {
 
     return NextResponse.json({ ok: true, plan, status: live.status });
   } catch (error) {
-    if (error instanceof AuthError) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Erro ao sincronizar." },
-      { status: 500 }
-    );
+    return safeError(error, "Erro ao sincronizar.");
   }
 }

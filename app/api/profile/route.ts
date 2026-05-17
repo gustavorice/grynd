@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { AuthError, getOrSyncUser } from "@/lib/auth";
+import { getOrSyncUser } from "@/lib/auth";
+import { safeError } from "@/lib/errors";
 import { readProfile, saveProfile } from "@/lib/profile";
 import { enforceApiLimit } from "@/lib/rate-limit";
 
@@ -17,7 +18,7 @@ export async function GET() {
     const user = await getOrSyncUser();
     return NextResponse.json({ profile: await readProfile(user.id) });
   } catch (error) {
-    return errorResponse(error, "Erro ao carregar perfil.");
+    return safeError(error, "Erro ao carregar perfil.");
   }
 }
 
@@ -30,16 +31,6 @@ export async function POST(request: Request) {
     const profile = await saveProfile(user.id, body);
     return NextResponse.json({ profile });
   } catch (error) {
-    return errorResponse(error, "Erro ao salvar perfil.");
+    return safeError(error, "Erro ao salvar perfil.");
   }
-}
-
-function errorResponse(error: unknown, fallback: string) {
-  if (error instanceof AuthError) {
-    return NextResponse.json({ error: error.message }, { status: error.status });
-  }
-  return NextResponse.json(
-    { error: error instanceof Error ? error.message : fallback },
-    { status: 400 }
-  );
 }

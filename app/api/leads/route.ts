@@ -1,23 +1,23 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { AuthError, getOrSyncUser } from "@/lib/auth";
+import { getOrSyncUser } from "@/lib/auth";
+import { LeadInputSchema, safeError } from "@/lib/errors";
 import { enforceApiLimit } from "@/lib/rate-limit";
 import { deleteLead, readLeads, updateLeadStatus, upsertLead } from "@/lib/store";
-import type { Lead } from "@/lib/types";
 
 const PatchSchema = z.object({
-  id: z.string(),
+  id: z.string().min(1).max(200),
   status: z.enum(["new", "saved", "sent", "contacted", "ignored"])
 });
 
-const LeadSchema = z.custom<Lead>((value) => Boolean(value && typeof value === "object"));
+const DeleteSchema = z.object({ id: z.string().min(1).max(200) });
 
 export async function GET() {
   try {
     const user = await getOrSyncUser();
     return NextResponse.json({ leads: await readLeads(user.id) });
   } catch (error) {
-    return errorResponse(error, "Erro ao listar leads.");
+    return safeError(error, "Erro ao listar leads.");
   }
 }
 
@@ -26,14 +26,14 @@ export async function POST(request: Request) {
     const user = await getOrSyncUser();
     const limited = await enforceApiLimit(user.id);
     if (limited) return limited;
-    const lead = LeadSchema.parse(await request.json());
+    const lead = LeadInputSchema.parse(await request.json());
     const saved = await upsertLead(user.id, {
       ...lead,
       status: lead.status === "new" ? "saved" : lead.status
     });
     return NextResponse.json({ lead: saved });
   } catch (error) {
-    return errorResponse(error, "Erro ao salvar lead.");
+    return safeError(error, "Erro ao salvar lead.");
   }
 }
 
@@ -46,7 +46,7 @@ export async function PATCH(request: Request) {
     const lead = await updateLeadStatus(user.id, id, status);
     return NextResponse.json({ lead });
   } catch (error) {
-    return errorResponse(error, "Erro ao atualizar lead.");
+    return safeError(error, "Erro ao atualizar lead.");
   }
 }
 
@@ -55,19 +55,9 @@ export async function DELETE(request: Request) {
     const user = await getOrSyncUser();
     const limited = await enforceApiLimit(user.id);
     if (limited) return limited;
-    const { id } = z.object({ id: z.string() }).parse(await request.json());
+    const { id } = DeleteSchema.parse(await request.json());
     return NextResponse.json(await deleteLead(user.id, id));
   } catch (error) {
-    return errorResponse(error, "Erro ao remover lead.");
+    return safeError(error, "Erro ao remover lead.");
   }
-}
-
-function errorResponse(error: unknown, fallback: string) {
-  if (error instanceof AuthError) {
-    return NextResponse.json({ error: error.message }, { status: error.status });
-  }
-  return NextResponse.json(
-    { error: error instanceof Error ? error.message : fallback },
-    { status: 400 }
-  );
 }

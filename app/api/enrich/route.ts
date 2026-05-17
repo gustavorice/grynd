@@ -1,16 +1,18 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { AuthError, getOrSyncUser } from "@/lib/auth";
+import { getOrSyncUser } from "@/lib/auth";
 import { diagnoseLead } from "@/lib/diagnose";
 import { enrichFromWebsite } from "@/lib/enrich";
+import { LeadInputSchema, safeError } from "@/lib/errors";
 import { enforceApiLimit } from "@/lib/rate-limit";
 import { readLeads, upsertLeads } from "@/lib/store";
-import type { Lead } from "@/lib/types";
 
-const EnrichSchema = z.object({
-  id: z.string().optional(),
-  lead: z.custom<Lead>((value) => !value || (typeof value === "object" && value !== null)).optional()
-});
+const EnrichSchema = z
+  .object({
+    id: z.string().min(1).max(200).optional(),
+    lead: LeadInputSchema.optional()
+  })
+  .refine((v) => v.id || v.lead, { message: "É preciso enviar id ou lead." });
 
 export async function POST(request: Request) {
   try {
@@ -35,12 +37,6 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ lead: updated });
   } catch (error) {
-    if (error instanceof AuthError) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Erro ao enriquecer lead." },
-      { status: 400 }
-    );
+    return safeError(error, "Erro ao enriquecer lead.");
   }
 }

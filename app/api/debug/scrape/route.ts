@@ -10,9 +10,31 @@ export const maxDuration = 60;
  * iniciar em produção e abrir uma página simples. Retorna timing detalhado
  * e qualquer erro que aconteça.
  *
- * Requer autenticação pra não expor a usuários anônimos.
+ * Restrito a:
+ *  - Ambientes nao-producao (preview/dev) com auth.
+ *  - Em producao: so user(s) listados em DEBUG_USER_IDS conseguem chamar
+ *    (separados por virgula). Sem isso, qualquer user autenticado poderia
+ *    queimar 60s + 3GB RAM da quota Vercel chamando em loop.
  */
 export async function GET() {
+  const isProd = process.env.VERCEL_ENV === "production";
+  const allowedIds = (process.env.DEBUG_USER_IDS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  let userId: string;
+  try {
+    userId = await requireUserId();
+  } catch {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (isProd && !allowedIds.includes(userId)) {
+    // Resposta opaca: parece um 404 pra nao revelar a existencia do endpoint
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   const timings: Record<string, number> = {};
   const result: Record<string, unknown> = {
     env: {
@@ -22,12 +44,6 @@ export async function GET() {
     },
     timings
   };
-
-  try {
-    await requireUserId();
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
 
   const t0 = Date.now();
   let browser: Awaited<ReturnType<typeof launchBrowser>> | null = null;

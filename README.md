@@ -89,10 +89,11 @@ app/
   page.tsx              # Landing pública
 
 lib/
-  auth.ts               # Helpers Clerk + sync user
+  auth.ts               # Helpers Clerk + sync user (com migração FK email-conflict)
   db/{schema.ts,client.ts}
   diagnose.ts           # Score + porte do lead
   enrich.ts             # Extrai contatos de site
+  errors.ts             # safeError() + LeadInputSchema (centraliza tratamento)
   niches.ts             # Catálogo central de 60+ nichos + fallback
   phone.ts              # Normaliza telefone BR + valida DDD ANATEL
   plans.ts              # Definição dos 3 planos + add-on
@@ -163,6 +164,10 @@ Requer Chrome ou Edge instalado em path padrão Windows/Mac/Linux —
 | **Modal de welcome após checkout** | UX premium pra confirmar compra bem-sucedida. |
 | **Playwright em Vercel** | Frágil. Mitigação: SerpAPI quando crescer ou Fly.io worker dedicado. |
 | **Vercel Pro obrigatório** | Vercel Hobby proíbe uso comercial (licença). |
+| **`safeError()` centralizado** | Catches em rota retornavam `error.message` cru — vazava SQL/Stripe/Zod. Agora só `AuthError`/`QuotaError`/`ZodError` saem com mensagem amigável; resto vai pra log + "Erro interno" pro cliente. |
+| **`LeadInputSchema` estrito** | `z.custom(() => typeof === "object")` aceitava lixo. Schema validado por campo evita poluir DB. |
+| **Migração de FK por email-conflict** | Mesmo email com `id` diferente (Clerk dev↔prod) violava UNIQUE em `users.email`. Solução: renomear email do user antigo pra placeholder antes do INSERT, migrar todas FKs, deletar antigo — tudo em transação. |
+| **`/api/debug/scrape` gated por `DEBUG_USER_IDS`** | Endpoint queima 60s × 3GB RAM. Em prod, só user IDs na allowlist. Resto recebe 404 opaco. |
 
 ---
 
@@ -181,14 +186,28 @@ Requer Chrome ou Edge instalado em path padrão Windows/Mac/Linux —
 - SEO básico (robots.txt + sitemap.xml)
 - Widget de suporte FAQ
 - Modal premium pós-checkout
-- **Segurança**: rate limit em todas rotas autenticadas, CSP, IDOR auditado, sem XSS, headers de segurança completos
+- **Segurança** (auditada 17/mai):
+  - Rate limit em **todas** rotas autenticadas (inclusive `/api/stripe/*`)
+  - CSP completo com allowlist explícita
+  - IDOR: todas queries filtram por `userId` (auditado via grep)
+  - XSS: zero `dangerouslySetInnerHTML` no codebase
+  - Headers de segurança completos (X-Frame-Options, etc.)
+  - `safeError()` centraliza tratamento de erro — evita vazar Postgres/Stripe/Zod
+  - `LeadInputSchema` Zod estrito em `/api/leads`, `/enrich`, `/send-whatsapp`
+  - `/api/send-whatsapp` valida que `to` bate com `lead.phone`/`whatsapp` (evita abuso da Cloud API)
+  - `/api/debug/scrape` em prod só pra IDs em `DEBUG_USER_IDS`
+  - Fix do bug `getOrSyncUser` 500 (email duplicado Clerk dev↔prod)
 
 ### 🟡 Configurado mas precisa ativação
 
-- Sentry pra erros em produção (precisa criar conta + setar `SENTRY_DSN`)
+- **Sentry** — projeto `grynd-web` no Sentry SaaS. Falta:
+  - Setar `SENTRY_DSN` no Vercel
+  - Setar `SENTRY_AUTH_TOKEN` no Vercel (pra upload de source maps)
+  - Rodar `npx @sentry/wizard@latest -i nextjs` (uma vez, gera config)
 - Resend pra email transacional (precisa criar conta + verificar domínio)
 - Vercel Analytics (1 click no Vercel dashboard)
 - WhatsApp Cloud API (precisa verificar negócio no Meta — pode levar dias)
+- `DEBUG_USER_IDS` no Vercel (Clerk user ID em prod, separados por vírgula — sem isso, `/api/debug/scrape` fica fechado em prod, que é o default seguro)
 
 ### 🔴 Pendente pra cobrar de verdade
 
@@ -236,9 +255,15 @@ STRIPE_WEBHOOK_SECRET            # whsec_xxx
 UPSTASH_REDIS_REST_URL
 UPSTASH_REDIS_REST_TOKEN
 CRON_SECRET                      # qualquer string aleatória (cron auth)
+DEBUG_USER_IDS                   # Clerk user IDs autorizados em /api/debug/scrape (prod)
 GOOGLE_PLACES_API_KEY            # opcional, $200/mês free
 SERPAPI_KEY                      # opcional, scraping robusto
 WHATSAPP_*                       # opcional, só pra Agência
+SENTRY_DSN                       # opcional, observability
+NEXT_PUBLIC_SENTRY_DSN           # mesmo DSN, expose ao client
+SENTRY_AUTH_TOKEN                # opcional, upload de source maps (build time)
+SENTRY_ORG                       # opcional, sentry org slug
+SENTRY_PROJECT                   # opcional, sentry project slug (grynd-web)
 ```
 
 ---
@@ -288,6 +313,30 @@ quando crescer). Margem positiva com 2-3 Pro users.
 
 ---
 
+## Histórico de auditorias
+
+### 17/mai/2026 — Security checkup pré-lançamento
+
+Auditados todos os endpoints autenticados + middleware Clerk + webhook Stripe.
+
+**Confirmado OK**:
+- Multi-tenancy (todas queries filtram por `userId`)
+- Stripe webhook (signature + idempotência)
+- Cron (`CRON_SECRET` Bearer)
+- Customer ID sempre puxado de `subscriptions.userId` (nunca do body)
+- `.env.*` no `.gitignore`, só `.env.example` tracked
+- CSP + headers de segurança
+
+**Findings corrigidos no mesmo dia**:
+1. Bug latente `lib/auth.ts` — `onConflictDoNothing()` sem target dropava INSERT silenciosamente quando email já existia. **Fix**: renomear email do user antigo pra placeholder antes do INSERT, migrar FKs em transação.
+2. Error message spillage — todas as rotas retornavam `error.message` cru. **Fix**: `safeError()` em `lib/errors.ts` classifica e sanitiza.
+3. `/api/debug/scrape` acessível pra qualquer user logado. **Fix**: gate por `DEBUG_USER_IDS` em prod.
+4. Sem rate limit em `/api/stripe/{checkout,portal,addon,sync}`. **Fix**: `enforceApiLimit` em todas.
+5. `LeadSchema` aceitava qualquer objeto (`z.custom`). **Fix**: `LeadInputSchema` estrito por campo.
+6. `/api/send-whatsapp` aceitava `to` arbitrário (vetor de spam quando Cloud API ligado). **Fix**: validação que `to` bate com `lead.phone`/`whatsapp`.
+
+---
+
 ## Contato
 
 - E-mail: contato@grynd.com.br
@@ -296,3 +345,4 @@ quando crescer). Margem positiva com 2-3 Pro users.
 - Neon Console: https://console.neon.tech
 - Upstash Console: https://console.upstash.com
 - Vercel Dashboard: https://vercel.com/grynd/grynd
+- Sentry: https://sentry.io (org criada, projeto: grynd-web)

@@ -1,3 +1,5 @@
+import { isPublicHttpUrl } from "@/lib/url-safety";
+
 export type Enrichment = {
   email?: string;
   whatsapp?: string;
@@ -205,6 +207,10 @@ function joinUrl(base: string, path: string) {
 }
 
 async function fetchHtml(url: string): Promise<string | undefined> {
+  // Anti-SSRF: bloqueia file:, javascript:, IPs privados, loopback, metadata cloud.
+  // Sem isso, /api/enrich virava proxy pra qualquer URL que o atacante quisesse
+  // que o servidor da Vercel chamasse (incluindo metadata 169.254.169.254).
+  if (!isPublicHttpUrl(url)) return undefined;
   try {
     const response = await fetch(url, {
       headers: {

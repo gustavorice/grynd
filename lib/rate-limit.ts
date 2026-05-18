@@ -53,9 +53,27 @@ export async function checkRate(
   limit: Ratelimit | null,
   identifier: string
 ): Promise<RateLimitResult> {
-  if (!limit) return { ok: true, remaining: -1, reset: 0 };
-  const result = await limit.limit(identifier);
-  return { ok: result.success, remaining: result.remaining, reset: result.reset };
+  if (!limit) {
+    // Em producao, faltar Upstash REST URL/TOKEN nao pode silenciosamente
+    // desligar o rate limit — isso vira amplificacao perfeita. Em dev local
+    // mantemos fail-open pra nao exigir Redis pro dev rodar nada.
+    if (process.env.VERCEL_ENV === "production") {
+      console.error("[rate-limit] PROD sem Upstash configurado — fail-closing");
+      return { ok: false, remaining: 0, reset: Date.now() + 60_000 };
+    }
+    return { ok: true, remaining: -1, reset: 0 };
+  }
+  try {
+    const result = await limit.limit(identifier);
+    return { ok: result.success, remaining: result.remaining, reset: result.reset };
+  } catch (error) {
+    // Upstash indisponivel transiente: em prod fail-closed, em dev fail-open.
+    console.error("[rate-limit] erro ao checar:", error);
+    if (process.env.VERCEL_ENV === "production") {
+      return { ok: false, remaining: 0, reset: Date.now() + 60_000 };
+    }
+    return { ok: true, remaining: -1, reset: 0 };
+  }
 }
 
 import { NextResponse } from "next/server";

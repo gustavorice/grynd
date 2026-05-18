@@ -64,11 +64,22 @@ export const LeadInputSchema = z.object({
   city: z.string().max(120),
   phone: z.string().max(40).optional(),
   whatsapp: z.string().max(40).optional(),
-  website: z.string().max(500).optional(),
+  // URLs: precisam comecar com http:// ou https:// pra impedir injecao de
+  // javascript:/data:/file:/etc. que renderizam como <a href> no client.
+  // (instagram/facebook tambem aceitam handles simples — frontend prefixa com /)
+  website: z
+    .string()
+    .max(500)
+    .regex(/^https?:\/\//i, "URL precisa comecar com http(s)://")
+    .optional(),
   instagram: z.string().max(200).optional(),
   facebook: z.string().max(200).optional(),
   email: z.string().email().max(200).optional(),
-  mapsUrl: z.string().max(1000).optional(),
+  mapsUrl: z
+    .string()
+    .max(1000)
+    .regex(/^https?:\/\//i, "mapsUrl precisa comecar com http(s)://")
+    .optional(),
   rating: z.number().min(0).max(5).optional(),
   reviewCount: z.number().int().min(0).optional(),
   latitude: z.number().optional(),

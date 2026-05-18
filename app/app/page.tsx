@@ -34,6 +34,7 @@ import type { Plan, PlanId } from "@/lib/plans";
 import type { CompanyProfile } from "@/lib/profile";
 import type { QuotaSnapshot } from "@/lib/quota";
 import type { CompanySize, Lead, LeadStatus, SearchResponse } from "@/lib/types";
+import { safeExternalHref } from "@/lib/url-safety";
 
 type Me = {
   user: { id: string; email: string; fullName: string | null; imageUrl: string | null; plan: PlanId };
@@ -961,9 +962,17 @@ function LeadDetails({
         <Info icon={<MapPin size={17} />} value={lead.address || lead.city} />
         <Info icon={<Phone size={17} />} value={lead.phone} />
         <Info icon={<MessageCircle size={17} />} value={lead.whatsapp} />
-        <Info icon={<Instagram size={17} />} value={lead.instagram} href={lead.instagram} />
+        <Info
+          icon={<Instagram size={17} />}
+          value={lead.instagram}
+          href={safeExternalHref(lead.instagram)}
+        />
         <Info icon={<Mail size={17} />} value={lead.email} />
-        <Info icon={<Globe2 size={17} />} value={lead.website} href={lead.website} />
+        <Info
+          icon={<Globe2 size={17} />}
+          value={lead.website}
+          href={safeExternalHref(lead.website)}
+        />
       </div>
 
       <div className="insightBox">
@@ -980,8 +989,8 @@ function LeadDetails({
           <RefreshCw size={17} />
           Insight
         </button>
-        {lead.mapsUrl && (
-          <a href={lead.mapsUrl} target="_blank" rel="noreferrer">
+        {lead.mapsUrl && safeExternalHref(lead.mapsUrl) && (
+          <a href={safeExternalHref(lead.mapsUrl)} target="_blank" rel="noreferrer">
             <ExternalLink size={17} />
             Maps
           </a>

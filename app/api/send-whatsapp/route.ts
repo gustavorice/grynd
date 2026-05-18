@@ -11,6 +11,7 @@ import { PLANS, type PlanId } from "@/lib/plans";
 import { scrapeGoogleMapsContact } from "@/lib/providers/google-maps-scrape";
 import { enforceApiLimit } from "@/lib/rate-limit";
 import { upsertLead } from "@/lib/store";
+import { isPublicHttpUrlOnHosts } from "@/lib/url-safety";
 
 const SendSchema = z.object({
   lead: LeadInputSchema,
@@ -52,8 +53,15 @@ export async function POST(request: Request) {
       recipient = normalizeBrazilPhone(lead.whatsapp ?? lead.phone) ?? null;
     }
 
-    if (!recipient && lead.mapsUrl?.includes("google.com/maps")) {
-      const contact = await scrapeGoogleMapsContact(lead.mapsUrl);
+    // Validacao anti-SSRF: substring match em "google.com/maps" era frivel —
+    // `https://evil.com/?google.com/maps=1` passaria. Agora exigimos que o
+    // hostname REAL seja google.com / google.com.br.
+    const mapsUrlIsSafe =
+      typeof lead.mapsUrl === "string" &&
+      isPublicHttpUrlOnHosts(lead.mapsUrl, ["google.com", "google.com.br"]);
+
+    if (!recipient && mapsUrlIsSafe) {
+      const contact = await scrapeGoogleMapsContact(lead.mapsUrl as string);
       hydratedLead = {
         ...lead,
         phone: contact.phone ?? lead.phone,

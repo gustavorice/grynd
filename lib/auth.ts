@@ -90,7 +90,7 @@ export async function getOrSyncUser(): Promise<DbUser> {
     throw err;
   }
 
-  console.error(
+  console.log(
     "[auth] step3 ok userId=%s emailVerified=%s byEmailMatch=%s",
     userId,
     emailIsVerified,
@@ -113,7 +113,7 @@ export async function getOrSyncUser(): Promise<DbUser> {
     const oldPlan = byEmail[0].plan;
     const placeholderEmail = `migrating-${oldId}-${Date.now()}@grynd.invalid`;
 
-    console.error("[auth] step4 migracao oldId=%s -> newId=%s", oldId, userId);
+    console.log("[auth] step4 migracao oldId=%s -> newId=%s", oldId, userId);
 
     try {
       await db.transaction(async (tx) => {
@@ -159,7 +159,7 @@ export async function getOrSyncUser(): Promise<DbUser> {
   }
 
   // 4) User totalmente novo — INSERT simples
-  console.error("[auth] step5 insert novo userId=%s email=%s", userId, email);
+  console.log("[auth] step5 insert novo userId=%s email=%s", userId, email);
   try {
     const inserted = await db
       .insert(users)

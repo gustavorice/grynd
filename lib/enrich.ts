@@ -206,27 +206,63 @@ function joinUrl(base: string, path: string) {
   }
 }
 
-async function fetchHtml(url: string): Promise<string | undefined> {
-  // Anti-SSRF: bloqueia file:, javascript:, IPs privados, loopback, metadata cloud.
-  // Sem isso, /api/enrich virava proxy pra qualquer URL que o atacante quisesse
-  // que o servidor da Vercel chamasse (incluindo metadata 169.254.169.254).
-  if (!isPublicHttpUrl(url)) return undefined;
-  try {
-    const response = await fetch(url, {
-      headers: {
-        "user-agent": REALISTIC_UA,
-        accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "accept-language": "pt-BR,pt;q=0.9,en;q=0.8"
-      },
-      redirect: "follow",
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
-    });
+/**
+ * Anti-SSRF em fetch — valida URL no PRIMEIRO hop E em CADA REDIRECT.
+ *
+ * O `redirect: "follow"` original era furo: atacante registrava evil.com
+ * (publico, passava na validacao inicial), respondia 302 -> 169.254.169.254
+ * ou 10.x.x.x, e o fetch seguia automaticamente. Agora interceptamos cada
+ * Location header e revalidamos.
+ */
+const MAX_REDIRECTS = 5;
 
+async function fetchHtml(url: string): Promise<string | undefined> {
+  if (!isPublicHttpUrl(url)) return undefined;
+
+  let currentUrl = url;
+
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    let response: Response;
+    try {
+      response = await fetch(currentUrl, {
+        headers: {
+          "user-agent": REALISTIC_UA,
+          accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "accept-language": "pt-BR,pt;q=0.9,en;q=0.8"
+        },
+        redirect: "manual",
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
+      });
+    } catch {
+      return undefined;
+    }
+
+    // 3xx — valida proximo destino e segue manualmente
+    if (response.status >= 300 && response.status < 400) {
+      if (hop === MAX_REDIRECTS) return undefined; // redirect loop
+      const location = response.headers.get("location");
+      if (!location) return undefined;
+      let nextUrl: string;
+      try {
+        nextUrl = new URL(location, currentUrl).toString();
+      } catch {
+        return undefined;
+      }
+      if (!isPublicHttpUrl(nextUrl)) return undefined; // BLOCK: redirect pra interno
+      currentUrl = nextUrl;
+      continue;
+    }
+
+    // Resposta final
     const contentType = response.headers.get("content-type") ?? "";
     if (!response.ok || !contentType.includes("text/html")) return undefined;
-    const text = await response.text();
-    return text.length > 2_000_000 ? text.slice(0, 2_000_000) : text;
-  } catch {
-    return undefined;
+    try {
+      const text = await response.text();
+      return text.length > 2_000_000 ? text.slice(0, 2_000_000) : text;
+    } catch {
+      return undefined;
+    }
   }
+
+  return undefined;
 }

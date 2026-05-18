@@ -31,8 +31,13 @@ export async function getOrSyncUser(): Promise<DbUser> {
   const userId = await requireUserId();
 
   // 1) Tenta achar por ID — caminho feliz (user já existe)
-  const byId = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-  if (byId[0]) return byId[0];
+  try {
+    const byId = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    if (byId[0]) return byId[0];
+  } catch (err) {
+    console.error("[auth] step1 byId failed for userId=%s:", userId, err);
+    throw err;
+  }
 
   // 2) User novo — pega dados do Clerk
   const clerk = await currentUser();
@@ -42,7 +47,15 @@ export async function getOrSyncUser(): Promise<DbUser> {
     clerk.emailAddresses.find((e) => e.id === clerk.primaryEmailAddressId) ??
     clerk.emailAddresses[0];
   const email = primaryEmail?.emailAddress;
-  if (!email) throw new AuthError("Usuario sem e-mail no Clerk.");
+  if (!email) {
+    console.error(
+      "[auth] step2 sem email pra userId=%s — clerk.emailAddresses.length=%d primaryId=%s",
+      userId,
+      clerk.emailAddresses.length,
+      clerk.primaryEmailAddressId
+    );
+    throw new AuthError("Usuario sem e-mail no Clerk.");
+  }
 
   // CRITICO: só consideramos o email "confiavel" se Clerk confirmou verificacao.
   // Sem isso, alguem poderia criar conta com email de outra pessoa e acionar a
@@ -69,7 +82,20 @@ export async function getOrSyncUser(): Promise<DbUser> {
   //    Defesa anti-takeover (critica): só migra se o email do user logado for
   //    verificado no Clerk. Sem isso, alguem poderia criar conta com email de
   //    outra pessoa e ganhar plano/leads alheios.
-  const byEmail = await db.select().from(users).where(eq(users.email, email)).limit(1);
+  let byEmail: DbUser[];
+  try {
+    byEmail = await db.select().from(users).where(eq(users.email, email)).limit(1);
+  } catch (err) {
+    console.error("[auth] step3 byEmail failed for userId=%s email=%s:", userId, email, err);
+    throw err;
+  }
+
+  console.error(
+    "[auth] step3 ok userId=%s emailVerified=%s byEmailMatch=%s",
+    userId,
+    emailIsVerified,
+    byEmail[0] ? `oldId=${byEmail[0].id}` : "none"
+  );
 
   if (byEmail[0] && !emailIsVerified) {
     // Email ja registrado por outra conta E o usuario logado nao verificou esse
@@ -87,7 +113,10 @@ export async function getOrSyncUser(): Promise<DbUser> {
     const oldPlan = byEmail[0].plan;
     const placeholderEmail = `migrating-${oldId}-${Date.now()}@grynd.invalid`;
 
-    await db.transaction(async (tx) => {
+    console.error("[auth] step4 migracao oldId=%s -> newId=%s", oldId, userId);
+
+    try {
+      await db.transaction(async (tx) => {
       // (a) Libera o email do registro antigo
       await tx
         .update(users)
@@ -111,31 +140,51 @@ export async function getOrSyncUser(): Promise<DbUser> {
       await tx.execute(sql`UPDATE leads SET user_id = ${userId} WHERE user_id = ${oldId}`);
       await tx.execute(sql`UPDATE company_profile SET user_id = ${userId} WHERE user_id = ${oldId}`);
 
-      // (d) Apaga o registro antigo (já sem FKs apontando pra ele)
-      await tx.delete(users).where(eq(users.id, oldId));
-    });
+        // (d) Apaga o registro antigo (já sem FKs apontando pra ele)
+        await tx.delete(users).where(eq(users.id, oldId));
+      });
+    } catch (err) {
+      console.error(
+        "[auth] step4 migration TX falhou oldId=%s newId=%s email=%s:",
+        oldId,
+        userId,
+        email,
+        err
+      );
+      throw err;
+    }
 
     const migrated = await db.select().from(users).where(eq(users.id, userId)).limit(1);
     if (migrated[0]) return migrated[0];
   }
 
   // 4) User totalmente novo — INSERT simples
-  const inserted = await db
-    .insert(users)
-    .values({
-      id: userId,
-      email,
-      fullName,
-      imageUrl,
-      plan: "free"
-    })
-    .onConflictDoUpdate({
-      target: users.id,
-      set: { email, fullName, imageUrl, updatedAt: new Date() }
-    })
-    .returning();
+  console.error("[auth] step5 insert novo userId=%s email=%s", userId, email);
+  try {
+    const inserted = await db
+      .insert(users)
+      .values({
+        id: userId,
+        email,
+        fullName,
+        imageUrl,
+        plan: "free"
+      })
+      .onConflictDoUpdate({
+        target: users.id,
+        set: { email, fullName, imageUrl, updatedAt: new Date() }
+      })
+      .returning();
 
-  return inserted[0];
+    if (!inserted[0]) {
+      console.error("[auth] step5 INSERT returnou vazio pra userId=%s — algo inesperado", userId);
+      throw new Error("INSERT do user nao retornou nada.");
+    }
+    return inserted[0];
+  } catch (err) {
+    console.error("[auth] step5 INSERT falhou userId=%s email=%s:", userId, email, err);
+    throw err;
+  }
 }
 
 export class AuthError extends Error {

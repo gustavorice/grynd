@@ -38,10 +38,17 @@ export async function getOrSyncUser(): Promise<DbUser> {
   const clerk = await currentUser();
   if (!clerk) throw new AuthError("Sessao Clerk invalida.");
 
-  const email =
-    clerk.emailAddresses.find((e) => e.id === clerk.primaryEmailAddressId)?.emailAddress ??
-    clerk.emailAddresses[0]?.emailAddress;
+  const primaryEmail =
+    clerk.emailAddresses.find((e) => e.id === clerk.primaryEmailAddressId) ??
+    clerk.emailAddresses[0];
+  const email = primaryEmail?.emailAddress;
   if (!email) throw new AuthError("Usuario sem e-mail no Clerk.");
+
+  // CRITICO: só consideramos o email "confiavel" se Clerk confirmou verificacao.
+  // Sem isso, alguem poderia criar conta com email de outra pessoa e acionar a
+  // migracao de FKs pra ganhar plano/leads alheios. (Em config padrao do Clerk
+  // ja exige verificacao antes de criar sessao, mas defesa em profundidade.)
+  const emailIsVerified = primaryEmail?.verification?.status === "verified";
 
   const fullName = [clerk.firstName, clerk.lastName].filter(Boolean).join(" ") || null;
   const imageUrl = clerk.imageUrl || null;
@@ -58,7 +65,21 @@ export async function getOrSyncUser(): Promise<DbUser> {
   //
   //    Se rodar tudo numa transação, ou tudo passa ou nada acontece — sem
   //    estados intermediários expostos.
+  //
+  //    Defesa anti-takeover (critica): só migra se o email do user logado for
+  //    verificado no Clerk. Sem isso, alguem poderia criar conta com email de
+  //    outra pessoa e ganhar plano/leads alheios.
   const byEmail = await db.select().from(users).where(eq(users.email, email)).limit(1);
+
+  if (byEmail[0] && !emailIsVerified) {
+    // Email ja registrado por outra conta E o usuario logado nao verificou esse
+    // email. Recusa criacao pra impedir takeover. Em prod o Clerk default ja
+    // bloqueia esse path (sessao exige verify), mas defesa em profundidade.
+    throw new AuthError(
+      "Esse e-mail ja esta em uso e o seu nao foi verificado. Verifique o seu e-mail pra continuar."
+    );
+  }
+
   if (byEmail[0]) {
     const oldId = byEmail[0].id;
     const oldFullName = byEmail[0].fullName;

@@ -35,15 +35,19 @@ export async function GET() {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  // Em prod (mesmo pro DEBUG_USER_IDS) não retornamos env vars nem stack
+  // pra reduzir superfície de info disclosure. Em preview/dev liberamos tudo.
+  const verbose = process.env.VERCEL_ENV !== "production";
+
   const timings: Record<string, number> = {};
-  const result: Record<string, unknown> = {
-    env: {
+  const result: Record<string, unknown> = { timings };
+  if (verbose) {
+    result.env = {
       vercel: Boolean(process.env.VERCEL),
       vercel_env: process.env.VERCEL_ENV,
       node_env: process.env.NODE_ENV
-    },
-    timings
-  };
+    };
+  }
 
   const t0 = Date.now();
   let browser: Awaited<ReturnType<typeof launchBrowser>> | null = null;
@@ -74,7 +78,11 @@ export async function GET() {
   } catch (err) {
     result.success = false;
     result.error = err instanceof Error ? err.message : String(err);
-    result.error_stack = err instanceof Error ? err.stack?.split("\n").slice(0, 5).join("\n") : undefined;
+    // Stack só em preview/dev. Em prod o stack vai pro Sentry, não pra response.
+    if (verbose) {
+      result.error_stack =
+        err instanceof Error ? err.stack?.split("\n").slice(0, 5).join("\n") : undefined;
+    }
   } finally {
     if (browser) {
       await browser.close().catch(() => null);

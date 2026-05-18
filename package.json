@@ -19,7 +19,7 @@
     "@sparticuz/chromium": "^138.0.2",
     "@upstash/ratelimit": "^2.0.5",
     "@upstash/redis": "^1.34.3",
-    "drizzle-orm": "^0.38.3",
+    "drizzle-orm": "^0.45.2",
     "geist": "^1.7.0",
     "lucide-react": "^0.468.0",
     "next": "^15.0.3",

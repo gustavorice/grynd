@@ -19,7 +19,11 @@ export async function POST(request: Request) {
       throw new Error("Sem assinatura ativa pra abrir o portal de billing.");
     }
 
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? new URL(request.url).origin;
+    const fromEnv = process.env.NEXT_PUBLIC_APP_URL;
+    if (process.env.VERCEL_ENV === "production" && !fromEnv) {
+      throw new Error("NEXT_PUBLIC_APP_URL nao configurada em producao.");
+    }
+    const baseUrl = fromEnv ?? new URL(request.url).origin;
     const session = await stripe.billingPortal.sessions.create({
       customer: sub.stripeCustomerId,
       return_url: baseUrl

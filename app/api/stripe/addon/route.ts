@@ -55,5 +55,12 @@ export async function POST(request: Request) {
 }
 
 function getBaseUrl(request: Request) {
-  return process.env.NEXT_PUBLIC_APP_URL ?? new URL(request.url).origin;
+  const fromEnv = process.env.NEXT_PUBLIC_APP_URL;
+  if (process.env.VERCEL_ENV === "production") {
+    if (!fromEnv) {
+      throw new Error("NEXT_PUBLIC_APP_URL nao configurada em producao.");
+    }
+    return fromEnv;
+  }
+  return fromEnv ?? new URL(request.url).origin;
 }

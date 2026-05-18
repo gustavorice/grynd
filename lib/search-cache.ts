@@ -17,8 +17,16 @@ declare global {
 const cache: Map<string, CachedEntry> = globalThis.__leadsSearchCache ?? new Map();
 globalThis.__leadsSearchCache = cache;
 
-export function cacheKey(niche: string, location: string, limit: number) {
-  return `${normalize(niche)}|${normalize(location)}|${limit}`;
+/**
+ * Cache key inclui userId pra isolar resultados — user A nao consegue
+ * usar cache de user B pra evitar consumo de quota.
+ *
+ * Design: "cache hit nao consome quota" continua valendo, mas SO pro
+ * mesmo user que originou a busca. Outro user pedindo a mesma busca
+ * vai cair em miss e consumir quota normalmente.
+ */
+export function cacheKey(userId: string, niche: string, location: string, limit: number) {
+  return `${userId}|${normalize(niche)}|${normalize(location)}|${limit}`;
 }
 
 export function readCache(key: string): CachedEntry | undefined {

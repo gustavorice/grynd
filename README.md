@@ -231,7 +231,7 @@ Requer Chrome ou Edge instalado em path padrão Windows/Mac/Linux —
 - Cobertura de busca em nichos raros (Apify Google Maps OU Fly.io worker)
 - RLS no Postgres (defesa em profundidade contra IDOR)
 - 2FA no Clerk
-- Cache compartilhado entre users
+- **CSP strict-dynamic / nonce-based** (atualmente usa `'unsafe-inline'` + `'unsafe-eval'` por necessidade do Clerk/Stripe/Next dev). Migração requer rework de loaders externos. Risco real baixo (sem `dangerouslySetInnerHTML`, sem render de input em `<script>`), mas é tech debt anotada.
 
 ---
 

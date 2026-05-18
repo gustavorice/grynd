@@ -44,7 +44,9 @@ export async function POST(request: Request) {
     }
 
     const params = SearchSchema.parse(await request.json());
-    const key = cacheKey(params.niche, params.location, params.limit);
+    // Cache key inclui user.id pra impedir que user A use cache de user B
+    // pra burlar consumo de quota.
+    const key = cacheKey(user.id, params.niche, params.location, params.limit);
 
     if (!params.refresh) {
       const cached = readCache(key);

@@ -3191,6 +3191,37 @@ input:focus {
   transition: opacity 200ms ease, transform 200ms ease;
 }
 
+.welcomeModal-ctaGhost {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  color: var(--ink-muted);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 13.5px;
+  font-weight: 500;
+  gap: 8px;
+  justify-content: center;
+  letter-spacing: -0.01em;
+  min-height: 42px;
+  padding: 0 20px;
+  transition: background 200ms ease, color 200ms ease, border-color 200ms ease;
+}
+
+.welcomeModal-ctaGhost:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--line-stronger);
+  color: var(--ink);
+}
+
+.welcomeModal-foot {
+  color: var(--ink-faint);
+  font-size: 12px;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
 .welcomeModal-cta:hover {
   opacity: 0.9;
   transform: translateY(-1px);

@@ -28,6 +28,7 @@ import {
   UserRound
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { QuotaModal } from "@/app/_components/QuotaModal";
 import { SupportWidget } from "@/app/_components/SupportWidget";
 import { WelcomeModal } from "@/app/_components/WelcomeModal";
 import type { Plan, PlanId } from "@/lib/plans";
@@ -97,6 +98,7 @@ export default function Home() {
   }>(null);
   const [showExpand, setShowExpand] = useState(false);
   const [extraLocationsInput, setExtraLocationsInput] = useState("");
+  const [quotaHit, setQuotaHit] = useState(false);
 
   const canSearch = location.trim().length >= 2 && niche.trim().length >= 2;
 
@@ -326,6 +328,7 @@ export default function Home() {
       const data = (await response.json()) as SearchResponse & { error?: string };
       if (response.status === 402) {
         setNotice(data.error ?? "Limite de leads atingido. Faca upgrade ou compre +200 leads.");
+        setQuotaHit(true); // abre o modal de conversao
         return;
       }
       if (response.status === 429) {
@@ -841,6 +844,17 @@ export default function Home() {
           planName={welcome.planName}
           searchesIncluded={welcome.searchesIncluded}
           onClose={() => setWelcome(null)}
+        />
+      )}
+
+      {quotaHit && me && (
+        <QuotaModal
+          planId={me.plan.id}
+          searchesIncluded={me.quota.searchesIncluded}
+          onUpgradePro={() => void startCheckout("pro")}
+          onUpgradeAgency={() => void startCheckout("agency")}
+          onBuyAddon={() => void startAddonCheckout()}
+          onClose={() => setQuotaHit(false)}
         />
       )}
     </main>

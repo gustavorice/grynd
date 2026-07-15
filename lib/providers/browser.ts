@@ -26,6 +26,25 @@ const isServerless = (): boolean =>
   Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
 
 /**
+ * O scraping via Playwright/@sparticuz/chromium precisa de ~3 GB de RAM e
+ * até 5 min de execução — recursos que SÓ existem no Vercel Pro. No plano
+ * Hobby (60s, memória default) o Chromium nem inicia.
+ *
+ * Por isso ele fica atrás de uma flag explícita `ENABLE_BROWSER_SCRAPE`.
+ * - Desligado (default): busca profunda usa SerpAPI + OSM (ambos HTTP, rodam
+ *   em qualquer plano). Nada de Chromium.
+ * - Ligado (`ENABLE_BROWSER_SCRAPE=true`): usa Playwright — só ligue no Pro,
+ *   com vercel.json configurando memory 3008 + maxDuration 300.
+ *
+ * Em dev local (fora de serverless) fica sempre habilitado — usa o Chrome
+ * instalado, sem custo de memória serverless.
+ */
+export const browserScrapeEnabled = (): boolean => {
+  if (!isServerless()) return true; // dev local usa Chrome instalado
+  return process.env.ENABLE_BROWSER_SCRAPE === "true";
+};
+
+/**
  * Lança um browser Playwright. Detecta ambiente:
  * - Vercel / AWS Lambda → @sparticuz/chromium (Chromium otimizado pra serverless)
  * - Local → Chrome/Edge instalado

@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-// Vercel Pro permite até 300s; deep scrape pode demorar com muitas queries.
-export const maxDuration = 300;
+// 60s cabe no Hobby. Com ENABLE_BROWSER_SCRAPE=true no Pro, suba pra 300 aqui
+// e no vercel.json pra dar tempo ao Playwright.
+export const maxDuration = 60;
 export const runtime = "nodejs";
 import { AuthError, getOrSyncUser } from "@/lib/auth";
 import { db } from "@/lib/db/client";
 import { searchHistory } from "@/lib/db/schema";
 import { searchGooglePlaces } from "@/lib/providers/google";
+import { browserScrapeEnabled } from "@/lib/providers/browser";
 import { searchGoogleMapsScrape } from "@/lib/providers/google-maps-scrape";
 import { searchOpenStreetMap } from "@/lib/providers/osm";
 import { searchSerpApi } from "@/lib/providers/serpapi";
@@ -89,10 +91,13 @@ export async function POST(request: Request) {
     const allResults: PerLocationResult[] = await Promise.all(
       locations.map(async (loc): Promise<PerLocationResult> => {
         const locParams = { ...params, location: loc, limit: perLocationLimit };
+        // Playwright só quando modo deep E o browser scrape está habilitado
+        // (Pro). No Hobby, a busca profunda cai pra SerpAPI + OSM (HTTP).
+        const useBrowserScrape = params.mode === "deep" && browserScrapeEnabled();
         const [places, osm, scrape, serp] = await Promise.allSettled([
           searchGooglePlaces(locParams),
           searchOpenStreetMap({ ...locParams, enrich: false }),
-          params.mode === "deep" ? searchGoogleMapsScrape(locParams) : Promise.resolve([] as Lead[]),
+          useBrowserScrape ? searchGoogleMapsScrape(locParams) : Promise.resolve([] as Lead[]),
           searchSerpApi(locParams)
         ]);
         const errors: string[] = [];

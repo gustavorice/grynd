@@ -8,6 +8,7 @@ import { getOrSyncUser } from "@/lib/auth";
 import { LeadInputSchema, safeError } from "@/lib/errors";
 import { normalizeBrazilPhone } from "@/lib/phone";
 import { PLANS, type PlanId } from "@/lib/plans";
+import { browserScrapeEnabled } from "@/lib/providers/browser";
 import { scrapeGoogleMapsContact } from "@/lib/providers/google-maps-scrape";
 import { enforceApiLimit } from "@/lib/rate-limit";
 import { upsertLead } from "@/lib/store";
@@ -56,7 +57,10 @@ export async function POST(request: Request) {
     // Validacao anti-SSRF: substring match em "google.com/maps" era frivel —
     // `https://evil.com/?google.com/maps=1` passaria. Agora exigimos que o
     // hostname REAL seja google.com / google.com.br.
+    // Scrape de contato via Playwright só roda com browser habilitado (Pro).
+    // No Hobby, pula — o lead sem telefone publico simplesmente nao envia.
     const mapsUrlIsSafe =
+      browserScrapeEnabled() &&
       typeof lead.mapsUrl === "string" &&
       isPublicHttpUrlOnHosts(lead.mapsUrl, ["google.com", "google.com.br"]);
 

@@ -4,19 +4,5 @@
       "path": "/api/cron/reset-quotas",
       "schedule": "0 3 1 * *"
     }
-  ],
-  "functions": {
-    "app/api/search/route.ts": {
-      "memory": 3008,
-      "maxDuration": 300
-    },
-    "app/api/send-whatsapp/route.ts": {
-      "memory": 3008,
-      "maxDuration": 60
-    },
-    "app/api/debug/scrape/route.ts": {
-      "memory": 3008,
-      "maxDuration": 60
-    }
-  }
+  ]
 }
